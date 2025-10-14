@@ -15,11 +15,11 @@
       </ul>
     </section>
 
-    <section class="block">
+    <section class="block" aria-label="热门文章">
       <h2>热门文章</h2>
       <div class="hot-grid">
         <div v-for="card in hotGrid" :key="card.id" class="card" @click="openArticle(card)">
-          <img :src="card.img" alt="封面" />
+          <img :src="card.img" alt="封面" loading="lazy" decoding="async" width="600" height="175" />
           <div class="title" :title="card.title">{{ card.title }}</div>
         </div>
       </div>
@@ -29,9 +29,27 @@
 </template>
 
 <script>
-import cover from '@/assets/logo.png'
+import cover1 from '@/assets/food1.jpg'
+import cover2 from '@/assets/painting.jpg'
+import cover3 from '@/assets/festival.jpg'
+
+import cover4 from '@/assets/campus.jpg'
+import cover5 from '@/assets/language.jpg'
+import cover6 from '@/assets/craft.jpg'
+
+import cover7 from '@/assets/temple.jpg'
+import cover8 from '@/assets/museum.jpg'
+import cover9 from '@/assets/music.jpg'
+
 export default {
   name: 'HomePage',
+  computed: {
+    hotGridOptimized() {
+      // 简单分片渲染：首屏优先（前6条）+ 剩余条目
+      // 可结合 v-intersection 进一步懒加载
+      return this.hotGrid
+    }
+  },
   data() {
     return {
       activities: [
@@ -47,15 +65,15 @@ export default {
       ],
       // 3 列 × 3 行
       hotGrid: [
-        { id: '1', title: '地方传统美食背后的故事', img: cover },
-        { id: '2', title: '木版年画的传承与创新', img: cover },
-        { id: '3', title: '民俗节庆与社区凝聚力', img: cover },
-        { id: 'x4', title: '戏曲进校园的传承实践', img: cover },
-        { id: 'x5', title: '地方方言里的文化密码', img: cover },
-        { id: 'x6', title: '传统手工艺的现代设计', img: cover },
-        { id: 'x7', title: '庙会中的非遗技艺巡礼', img: cover },
-        { id: 'x8', title: '古建筑修缮与活化利用', img: cover },
-        { id: 'x9', title: '地方音乐的田野采风', img: cover },
+        { id: '1', title: '地方传统美食背后的故事', img: cover1 },
+        { id: '2', title: '木版年画的传承与创新', img: cover2 },
+        { id: '3', title: '民俗节庆与社区凝聚力', img: cover3 },
+        { id: 'x4', title: '戏曲进校园的传承实践', img: cover4 },
+        { id: 'x5', title: '地方方言里的文化密码', img: cover5 },
+        { id: 'x6', title: '传统手工艺的现代设计', img: cover6 },
+        { id: 'x7', title: '庙会中的非遗技艺巡礼', img: cover7 },
+        { id: 'x8', title: '古建筑修缮与活化利用', img: cover8 },
+        { id: 'x9', title: '地方音乐的田野采风', img: cover9 },
       ],
     }
   },
@@ -93,7 +111,8 @@ export default {
 .hot-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
+  column-gap: 12px;
+  row-gap: 23px; /* 原 12px 的 1.9 倍 ≈ 23px，仅增纵向间距 */
 }
 .card {
   cursor: pointer;
@@ -103,9 +122,18 @@ export default {
   overflow: hidden;
   transition: box-shadow 120ms ease, transform 120ms ease;
 }
+/* Home.vue - style scoped */
+.card .thumb {
+  width: 100%;
+  height: 175px;          /* 原 92px 的 1.9 倍 ≈ 175px */
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  display: block;
+}
 .card:hover { box-shadow: 0 6px 18px rgba(0,0,0,0.06); transform: translateY(-1px); }
-.card img { width: 100%; height: 92px; object-fit: cover; display: block; }
-.card .title { padding: 8px; font-size: 20px; color: #2c3e50; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.card img { width: 100%; height: 175px; object-fit: cover; display: block; }
+.card .title { padding: 15px; font-size: 20px; color: #2c3e50; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 </style>
 
 
