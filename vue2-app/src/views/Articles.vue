@@ -31,11 +31,11 @@
         </div>
       </div>
     </div>
+    
+    <BaseModal v-if="showPublish" @close="closePublish">
+      <ArticlePublishForm @cancel="closePublish" @submit="handlePublish" />
+    </BaseModal>
   </div>
-  
-  <BaseModal v-if="showPublish" @close="closePublish">
-    <ArticlePublishForm @cancel="closePublish" @submit="handlePublish" />
-  </BaseModal>
   
 </template>
 

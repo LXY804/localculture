@@ -1,11 +1,13 @@
 <template>
   <div class="page">
     <h1>{{ article ? article.title : '文章详情' }}</h1>
-    <p v-if="article" class="summary">{{ article.summary }}</p>
-    <div v-if="article" class="content">{{ article.content }}</div>
-    <div class="actions">
-      <router-link class="btn" :to="{ name: 'articles' }">返回文章列表</router-link>
-    </div>
+    <template v-if="article">
+      <p class="summary">{{ article.summary }}</p>
+      <div class="content">{{ article.content }}</div>
+      <div class="actions">
+        <router-link class="btn" :to="{ name: 'articles' }">返回文章列表</router-link>
+      </div>
+    </template>
     <p v-else>未找到该文章。</p>
   </div>
   
