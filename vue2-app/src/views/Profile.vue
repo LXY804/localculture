@@ -21,6 +21,8 @@
         <button class="func-btn" @click="showMyPosts">我的帖子</button>
         <button class="func-btn" @click="showMyComments">我的评论</button>
         <button class="func-btn" @click="showMyActivities">我的活动</button>
+        <button class="func-btn" @click="currentView = 'settings'">消息设置</button>
+        <button class="func-btn" @click="currentView = 'account'">账号设置</button>
       </div>
 
       <!-- 内容展示区域 -->
@@ -121,12 +123,45 @@
             </div>
           </div>
         </div>
+
+        <div v-if="currentView === 'account'" class="content-section">
+          <h3>账号设置</h3>
+          <div class="account-list">
+            <div class="account-item">
+              <div class="account-label">密码</div>
+              <div class="account-desc">{{ account.security.passwordSet ? '已设置密码' : '存在风险，请设置密码' }}</div>
+              <button class="account-action" @click="onSetPassword">{{ account.security.passwordSet ? '修改密码' : '设置密码' }}</button>
+            </div>
+            <div class="account-item">
+              <div class="account-label">手机</div>
+              <div class="account-desc">{{ maskPhone(account.mobile) }}</div>
+              <button class="account-action" @click="onChangeMobile">修改手机</button>
+            </div>
+            <div class="account-item">
+              <div class="account-label">邮箱</div>
+              <div class="account-desc">{{ account.email ? account.email : '存在风险，请绑定邮箱' }}</div>
+              <button class="account-action" @click="onBindEmail">{{ account.email ? '修改邮箱' : '绑定邮箱' }}</button>
+            </div>
+            <div class="account-item">
+              <div class="account-label">三方账号</div>
+              <div class="account-desc">微信</div>
+              <button class="account-action" @click="onToggleWeixin">{{ account.weixinBound ? '解绑' : '绑定' }}</button>
+            </div>
+            <div class="account-item">
+              <div class="account-label">登录记录</div>
+              <div class="account-desc"></div>
+              <button class="account-action" @click="onViewLoginRecords">查看记录</button>
+            </div>
+            <div class="account-item">
+              <div class="account-label">账号注销</div>
+              <div class="account-desc"></div>
+              <button class="account-action danger" @click="onCloseAccount">立即注销</button>
+            </div>
+          </div>
+        </div>
       </div>
 
-      <!-- 消息设置按钮 -->
-      <div class="settings-section">
-        <button class="settings-btn" @click="currentView = 'settings'">消息设置</button>
-      </div>
+      
     </div>
 
     <!-- 编辑资料弹窗 -->
@@ -134,6 +169,14 @@
       <div class="modal-content" @click.stop>
         <h3>编辑资料</h3>
         <form @submit.prevent="saveProfile">
+          <div class="form-group">
+            <label>头像</label>
+            <div class="avatar-upload">
+              <img :src="editForm.avatar" alt="当前头像" class="current-avatar" />
+              <input ref="avatarInput" type="file" class="avatar-input" accept="image/*" @change="handleAvatarChange" />
+              <button type="button" class="upload-btn" @click="triggerAvatarUpload">选择头像</button>
+            </div>
+          </div>
           <div class="form-group">
             <label>昵称</label>
             <input v-model="editForm.nickname" type="text" />
@@ -171,6 +214,7 @@ export default {
         role: 'user'
       },
       editForm: {
+        avatar: 'https://via.placeholder.com/80x80?text=Avatar',
         nickname: '文化爱好者',
         email: 'user@example.com',
         bio: '热爱传统文化，喜欢分享和交流'
@@ -242,7 +286,13 @@ export default {
           date: '2023-11-05',
           status: 'completed'
         }
-      ]
+      ],
+      account: {
+        security: { passwordSet: false },
+        mobile: '182****9635',
+        email: '',
+        weixinBound: false,
+      }
     }
   },
   methods: {
@@ -269,8 +319,27 @@ export default {
     saveProfile() {
       // 保存用户资料
       this.userInfo.username = this.editForm.nickname
+      this.userInfo.avatar = this.editForm.avatar
       alert('资料保存成功！')
       this.openEditModal = false
+    },
+    // 账号设置相关交互（示意）
+    onSetPassword() { alert('进入设置/修改密码流程（示意）') },
+    onChangeMobile() { alert('进入修改手机流程（示意）') },
+    onBindEmail() { alert('进入绑定/修改邮箱流程（示意）') },
+    onToggleWeixin() { this.account.weixinBound = !this.account.weixinBound },
+    onViewLoginRecords() { alert('展示登录记录（示意）') },
+    onCloseAccount() { if (confirm('确定要注销账号吗？')) alert('已提交注销申请（示意）') },
+    maskPhone(v){ return v || '未绑定' },
+    triggerAvatarUpload() { this.$refs.avatarInput && this.$refs.avatarInput.click() },
+    handleAvatarChange(e) {
+      const file = e && e.target && e.target.files && e.target.files[0]
+      if (!file) return
+      const reader = new FileReader()
+      reader.onload = (ev) => {
+        this.editForm.avatar = ev.target && ev.target.result || this.editForm.avatar
+      }
+      reader.readAsDataURL(file)
     }
   }
 }
@@ -715,6 +784,22 @@ input:checked + .slider:before {
 .form-actions button:hover {
   opacity: 0.8;
 }
+
+/* 头像上传样式 */
+.avatar-upload { display: flex; align-items: center; gap: 16px; }
+.current-avatar { width: 60px; height: 60px; border-radius: 50%; object-fit: cover; border: 2px solid #dcdfe6; }
+.avatar-input { display: none; }
+.upload-btn { background: #f5f7fa; border: 1px solid #dcdfe6; color: #606266; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-size: 14px; transition: all 0.2s ease; }
+.upload-btn:hover { background: #e6e9ef; border-color: #42b983; color: #42b983; }
+
+/* 账号设置样式 */
+.account-list { display: flex; flex-direction: column; }
+.account-item { display: grid; grid-template-columns: 120px 1fr auto; align-items: center; padding: 14px 0; border-bottom: 1px solid #f0f0f0; }
+.account-label { color: #2c3e50; font-weight: 600; }
+.account-desc { color: #606266; }
+.account-action { padding: 6px 12px; border: 1px solid #dcdfe6; background: #fff; border-radius: 4px; cursor: pointer; }
+.account-action.danger { border-color: #dc3545; color: #dc3545; }
+.account-action:hover { background: #f2f3f5; }
 </style>
 
 

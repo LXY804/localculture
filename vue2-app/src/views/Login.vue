@@ -42,5 +42,3 @@ export default {
 .form { display: flex; flex-direction: column; gap: 12px; max-width: 320px; }
 .link { margin-left: 8px; }
 </style>
-
-

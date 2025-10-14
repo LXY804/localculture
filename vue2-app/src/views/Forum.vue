@@ -5,7 +5,7 @@
       <div class="searchbar">
         <input v-model="q" placeholder="关键词" @keyup.enter="applyFilter" />
         <button @click="applyFilter">查询</button>
-        <button class="publish-btn" @click="openPostModal">发布帖子</button>
+        <button class="publish-btn" @click="openPostModal">发帖</button>
       </div>
     </div>
 
@@ -152,7 +152,7 @@ export default {
 .searchbar { display: inline-flex; gap: 6px; }
 .searchbar input { padding: 6px 10px; border: 1px solid #e5e7eb; border-radius: 6px; }
 .searchbar button { padding: 6px 10px; border: 1px solid #dcdfe6; background: #fff; border-radius: 6px; cursor: pointer; }
-.publish-btn { background: #cf2f25; color: #fff; border-color: #cf2f25; }
+.publish-btn { background: #cf2f25 !important; color: #fff !important; border-color: #cf2f25 !important; }
 
 .tabs { display: flex; gap: 8px; border-bottom: 2px solid #cf2f25; padding: 6px 0; margin-bottom: 8px; }
 .tab { padding: 4px 10px; border-radius: 4px; background: #cf2f25; color: #fff; border: none; cursor: pointer; }
@@ -175,5 +175,7 @@ export default {
 .dialog-actions { display: flex; gap: 8px; justify-content: flex-end; }
 .dialog-actions .ghost { background: #f3f4f6; border: 1px solid #e5e7eb; }
 </style>
+
+
 
 
