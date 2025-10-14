@@ -4,6 +4,7 @@
       <h1>文章列表</h1>
       <input v-model="localQ" class="search after-title" placeholder="搜索标题/摘要" @keyup.enter="applyFilter" />
       <div class="actions">
+        <button class="btn primary" @click="openPublish">发布文章</button>
         <select v-model="sortBy">
           <option value="latest">最新</option>
           <option value="oldest">最早</option>
@@ -32,15 +33,22 @@
     </div>
   </div>
   
+  <BaseModal v-if="showPublish" @close="closePublish">
+    <ArticlePublishForm @cancel="closePublish" @submit="handlePublish" />
+  </BaseModal>
+  
 </template>
 
 <script>
 import articles from '@/data/articles'
+import BaseModal from '@/components/Modal.vue'
+import ArticlePublishForm from '@/components/ArticlePublishForm.vue'
 export default {
   name: 'ArticlesPage',
   data() {
-    return { list: articles, localQ: this.$route.query.q || '', sortBy: 'latest' }
+    return { list: articles, localQ: this.$route.query.q || '', sortBy: 'latest', showPublish: false }
   },
+  components: { BaseModal, ArticlePublishForm },
   computed: {
     filtered() {
       const q = (this.localQ || '').toLowerCase()
@@ -64,6 +72,8 @@ export default {
     '$route.query.q'(v) { this.localQ = v || '' }
   },
   methods: {
+    openPublish() { this.showPublish = true },
+    closePublish() { this.showPublish = false },
     applyFilter() {
       this.$router.replace({ query: { q: this.localQ || undefined } })
     },
@@ -72,6 +82,16 @@ export default {
       const d = new Date(iso)
       const p = (n) => String(n).padStart(2, '0')
       return `${d.getFullYear()}/${p(d.getMonth()+1)}/${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`
+    },
+    handlePublish(payload) {
+      const newId = String(Date.now())
+      const newArticle = { id: newId, date: new Date().toISOString(), ...payload }
+      this.list.unshift(newArticle)
+      this.closePublish()
+      this.$nextTick(() => {
+        alert('发布成功！')
+        this.$router.push({ name: 'article-detail', params: { id: newId }, query: { from: 'list' } })
+      })
     }
   }
 }
@@ -97,6 +117,7 @@ export default {
 .ops { display: flex; gap: 8px; }
 .btn { border: 1px solid #dcdfe6; background: #fff; border-radius: 4px; padding: 4px 10px; cursor: pointer; }
 .btn:hover { background: #f2f3f5; }
+.btn.primary { background: #2563eb; border-color: #2563eb; color: #fff; }
 </style>
 
 
