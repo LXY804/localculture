@@ -17,10 +17,10 @@
 
       <!-- 功能按钮区域 -->
       <div class="function-buttons">
-        <button class="func-btn" @click="showMyCollections">我的收藏</button>
-        <button class="func-btn" @click="showMyPosts">我的帖子</button>
-        <button class="func-btn" @click="showMyComments">我的评论</button>
-        <button class="func-btn" @click="showMyActivities">我的活动</button>
+        <button class="func-btn" @click="showMyCollections">我的收藏 ({{ userCollections.length }})</button>
+        <button class="func-btn" @click="showMyPosts">我的帖子 ({{ userPosts.length }})</button>
+        <button class="func-btn" @click="showMyComments">我的评论 ({{ userComments.length }})</button>
+        <button class="func-btn" @click="showMyLikes">我的点赞 ({{ userLikes.length }})</button>
         <button class="func-btn" @click="currentView = 'settings'">消息设置</button>
         <button class="func-btn" @click="currentView = 'account'">账号设置</button>
       </div>
@@ -29,16 +29,18 @@
       <div class="content-area">
         <div v-if="currentView === 'collections'" class="content-section">
           <h3>我的收藏</h3>
-          <div v-if="myCollections.length === 0" class="empty-state">
+          <div v-if="userCollections.length === 0" class="empty-state">
             <p>暂无收藏内容</p>
           </div>
           <div v-else class="collection-list">
-            <div v-for="item in myCollections" :key="item.id" class="collection-item">
-              <img :src="item.image" alt="收藏内容" class="collection-image" />
+            <div v-for="item in userCollections" :key="item.id" class="collection-item" @click="goToArticle(item.id)">
               <div class="collection-info">
                 <h4>{{ item.title }}</h4>
                 <p>{{ item.summary }}</p>
-                <span class="collection-date">{{ item.collectDate }}</span>
+                <div class="collection-meta">
+                  <span class="collection-author">作者：{{ item.author }}</span>
+                  <span class="collection-date">{{ formatDate(item.date) }}</span>
+                </div>
               </div>
             </div>
           </div>
@@ -46,16 +48,16 @@
 
         <div v-if="currentView === 'posts'" class="content-section">
           <h3>我的帖子</h3>
-          <div v-if="myPosts.length === 0" class="empty-state">
+          <div v-if="userPosts.length === 0" class="empty-state">
             <p>暂无发布的帖子</p>
           </div>
           <div v-else class="post-list">
-            <div v-for="post in myPosts" :key="post.id" class="post-item">
+            <div v-for="post in userPosts" :key="post.id" class="post-item" @click="goToArticle(post.id)">
               <h4>{{ post.title }}</h4>
               <p>{{ post.summary }}</p>
               <div class="post-meta">
                 <span class="post-tag" v-for="tag in post.tags" :key="tag">{{ tag }}</span>
-                <span class="post-date">{{ post.date }}</span>
+                <span class="post-date">{{ formatDate(post.date) }}</span>
               </div>
             </div>
           </div>
@@ -63,14 +65,35 @@
 
         <div v-if="currentView === 'comments'" class="content-section">
           <h3>我的评论</h3>
-          <div v-if="myComments.length === 0" class="empty-state">
+          <div v-if="userComments.length === 0" class="empty-state">
             <p>暂无评论记录</p>
           </div>
           <div v-else class="comment-list">
-            <div v-for="comment in myComments" :key="comment.id" class="comment-item">
-              <h4>{{ comment.targetTitle }}</h4>
+            <div v-for="comment in userComments" :key="comment.id" class="comment-item" @click="goToComment(comment.articleId, comment.id)">
+              <h4>{{ getArticleTitle(comment.articleId) }}</h4>
               <p class="comment-content">{{ comment.content }}</p>
-              <span class="comment-date">{{ comment.date }}</span>
+              <div class="comment-meta">
+                <span class="comment-date">{{ formatDate(comment.date) }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div v-if="currentView === 'likes'" class="content-section">
+          <h3>我的点赞</h3>
+          <div v-if="userLikes.length === 0" class="empty-state">
+            <p>暂无点赞记录</p>
+          </div>
+          <div v-else class="like-list">
+            <div v-for="like in userLikes" :key="like.id" class="like-item" @click="goToArticle(like.id)">
+              <div class="like-info">
+                <h4>{{ like.title }}</h4>
+                <p>{{ like.summary }}</p>
+                <div class="like-meta">
+                  <span class="like-author">作者：{{ like.author }}</span>
+                  <span class="like-date">{{ formatDate(like.date) }}</span>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -200,6 +223,9 @@
 </template>
 
 <script>
+import { mapGetters } from 'vuex'
+import articles from '@/data/articles'
+
 export default {
   name: 'ProfilePage',
   data() {
@@ -295,6 +321,26 @@ export default {
       }
     }
   },
+  computed: {
+    ...mapGetters(['userActivities', 'username']),
+    userCollections() {
+      return this.userActivities.favorites.map(articleId => {
+        const article = articles.find(a => a.id === articleId)
+        return article ? { ...article, collectDate: new Date().toISOString() } : null
+      }).filter(Boolean)
+    },
+    userPosts() {
+      return articles.filter(article => article.author === this.username)
+    },
+    userComments() {
+      return this.userActivities.comments
+    },
+    userLikes() {
+      return this.userActivities.likes.map(articleId => {
+        return articles.find(a => a.id === articleId)
+      }).filter(Boolean)
+    }
+  },
   methods: {
     showMyCollections() {
       this.currentView = 'collections'
@@ -305,8 +351,31 @@ export default {
     showMyComments() {
       this.currentView = 'comments'
     },
+    showMyLikes() {
+      this.currentView = 'likes'
+    },
     showMyActivities() {
       this.currentView = 'activities'
+    },
+    formatDate(iso) {
+      if (!iso) return ''
+      const d = new Date(iso)
+      const p = (n) => String(n).padStart(2, '0')
+      return `${d.getFullYear()}年${p(d.getMonth()+1)}月${p(d.getDate())}日 ${p(d.getHours())}:${p(d.getMinutes())}`
+    },
+    getArticleTitle(articleId) {
+      const article = articles.find(a => a.id === articleId)
+      return article ? article.title : '未知文章'
+    },
+    goToArticle(articleId) {
+      this.$router.push({ name: 'article-detail', params: { id: articleId } })
+    },
+    goToComment(articleId, commentId) {
+      this.$router.push({ 
+        name: 'article-detail', 
+        params: { id: articleId },
+        query: { highlight: commentId }
+      })
     },
     getStatusText(status) {
       const statusMap = {
@@ -460,19 +529,18 @@ export default {
   padding: 16px;
   border: 1px solid #f0f0f0;
   border-radius: 8px;
-  transition: box-shadow 0.2s ease;
+  transition: all 0.2s ease;
+  cursor: pointer;
 }
 
 .collection-item:hover {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  transform: translateY(-2px);
+  border-color: #42b983;
 }
 
-.collection-image {
-  width: 60px;
-  height: 40px;
-  object-fit: cover;
-  border-radius: 4px;
-  margin-right: 16px;
+.collection-info {
+  flex: 1;
 }
 
 .collection-info h4 {
@@ -484,6 +552,18 @@ export default {
   margin: 0 0 8px 0;
   color: #606266;
   font-size: 14px;
+}
+
+.collection-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.collection-author {
+  color: #42b983;
+  font-size: 12px;
+  font-weight: 500;
 }
 
 .collection-date {
@@ -502,6 +582,14 @@ export default {
   padding: 16px;
   border: 1px solid #f0f0f0;
   border-radius: 8px;
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.post-item:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  transform: translateY(-2px);
+  border-color: #42b983;
 }
 
 .post-item h4 {
@@ -544,6 +632,14 @@ export default {
   padding: 16px;
   border: 1px solid #f0f0f0;
   border-radius: 8px;
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.comment-item:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  transform: translateY(-2px);
+  border-color: #42b983;
 }
 
 .comment-item h4 {
@@ -558,7 +654,66 @@ export default {
   line-height: 1.5;
 }
 
+.comment-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
 .comment-date {
+  color: #909399;
+  font-size: 12px;
+}
+
+/* 点赞列表 */
+.like-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.like-item {
+  padding: 16px;
+  border: 1px solid #f0f0f0;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.like-item:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  transform: translateY(-2px);
+  border-color: #ff6b6b;
+}
+
+.like-info {
+  flex: 1;
+}
+
+.like-info h4 {
+  margin: 0 0 8px 0;
+  color: #2c3e50;
+}
+
+.like-info p {
+  margin: 0 0 8px 0;
+  color: #606266;
+  font-size: 14px;
+}
+
+.like-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.like-author {
+  color: #ff6b6b;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.like-date {
   color: #909399;
   font-size: 12px;
 }
