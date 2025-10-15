@@ -86,7 +86,7 @@
           <!-- 评论列表 -->
           <div class="comments-list">
             <div 
-              v-for="comment in comments" 
+              v-for="comment in rootComments" 
               :key="comment.id"
               class="comment-item"
               :id="'comment-' + comment.id"
@@ -105,6 +105,23 @@
                   <span class="btn-icon">👍</span>
                   <span class="btn-text">{{ isCommentLiked(comment.id) ? '已赞' : '点赞' }}</span>
                 </button>
+                <button class="comment-reply-btn" @click="openReplyFor(comment.id)">回复</button>
+              </div>
+              <div v-if="replyOpenId===comment.id" class="reply-form">
+                <textarea v-model="replyText" rows="2" class="comment-input" placeholder="回复…"></textarea>
+                <button class="comment-submit-btn" :disabled="!replyText.trim()" @click="submitReply(comment)">提交回复</button>
+              </div>
+              <div class="replies" v-if="childrenMap[comment.id] && childrenMap[comment.id].length">
+                <div v-for="rc in childrenMap[comment.id]" :key="rc.id" class="reply-item" :id="'comment-' + rc.id">
+                  <div class="reply-header">
+                    <span class="reply-author">{{ rc.author }}</span>
+                    <span class="reply-date">{{ formatDate(rc.date) }}</span>
+                  </div>
+                  <div class="reply-content">{{ rc.content }}</div>
+                  <div class="reply-actions">
+                    <button class="comment-like-btn" :class="{ active: isCommentLiked(rc.id) }" @click="onToggleCommentLike(rc)"><span class="btn-icon">👍</span><span class="btn-text">{{ isCommentLiked(rc.id) ? '已赞' : '点赞' }}</span></button>
+                  </div>
+                </div>
               </div>
             </div>
             <div v-if="comments.length === 0" class="no-comments">
@@ -132,7 +149,9 @@ export default {
   props: { id: String },
   data() {
     return {
-      newComment: ''
+      newComment: '',
+      replyOpenId: null,
+      replyText: ''
     }
   },
   computed: {
@@ -152,6 +171,16 @@ export default {
     },
     comments() {
       return this.articleId ? this.$store.getters.getCommentsByArticle(this.articleId) : []
+    },
+    rootComments() { return this.comments.filter(c => !c.parentCommentId) },
+    childrenMap() {
+      const map = {}
+      this.comments.forEach(c => {
+        if (!c.parentCommentId) return
+        if (!map[c.parentCommentId]) map[c.parentCommentId] = []
+        map[c.parentCommentId].push(c)
+      })
+      return map
     }
   },
   methods: {
@@ -192,6 +221,12 @@ export default {
         articleId: this.articleId,
         commentAuthor: comment.author
       })
+    },
+    openReplyFor(commentId) { this.replyOpenId = commentId; this.replyText = '' },
+    submitReply(parent) {
+      if (!this.replyText.trim() || !this.articleId) return
+      this.$store.dispatch('addComment', { articleId: this.articleId, content: this.replyText.trim(), parentCommentId: parent.id, targetType: 'article', targetAuthor: parent.author })
+      this.replyText = ''; this.replyOpenId = null
     }
   },
   mounted() {

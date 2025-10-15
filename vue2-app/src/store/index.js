@@ -134,26 +134,34 @@ export default new Vuex.Store({
     toggleFavorite({ commit }, articleId) {
       commit('toggleFavorite', articleId)
     },
-    addComment({ commit }, { articleId, content }) {
+    addComment({ commit }, { articleId, content, parentCommentId = null, targetType, targetAuthor }) {
       const comment = {
         id: 'comment-' + Date.now(),
         articleId,
         content,
         date: new Date().toISOString(),
-        author: this.getters.username || '匿名用户'
+        author: this.getters.username || '匿名用户',
+        parentCommentId
       }
       commit('addComment', comment)
-      // 发送评论通知给文章作者（若非自己）
+      // 发送评论通知给目标作者（若非自己）
       try {
-        const articlesModule = require('@/data/articles').default
-        const article = (articlesModule || []).find(a => a.id === articleId)
-        const targetAuthor = article && article.author
+        let resolvedTargetType = targetType
+        let resolvedTargetAuthor = targetAuthor
+        if (!resolvedTargetType || !resolvedTargetAuthor) {
+          const articlesModule = require('@/data/articles').default
+          const article = (articlesModule || []).find(a => a.id === articleId)
+          if (article) {
+            resolvedTargetType = 'article'
+            resolvedTargetAuthor = article.author
+          }
+        }
         const actor = this.getters.username || '匿名用户'
-        if (targetAuthor && targetAuthor !== actor) {
+        if (resolvedTargetAuthor && resolvedTargetAuthor !== actor) {
           commit('addNotification', {
             id: 'ntf-' + Date.now(),
             type: 'comment',
-            targetType: 'article',
+            targetType: resolvedTargetType || 'article',
             actor,
             articleId,
             date: new Date().toISOString(),
@@ -163,14 +171,14 @@ export default new Vuex.Store({
       } catch(e) { /* 忽略本地数据读取失败 */ }
       return comment
     },
-    toggleCommentLike({ commit, getters }, { commentId, articleId, commentAuthor }) {
+    toggleCommentLike({ commit, getters }, { commentId, articleId, commentAuthor, targetType = 'article' }) {
       commit('toggleCommentLike', commentId)
       const actor = getters.username || '匿名用户'
       if (commentAuthor && commentAuthor !== actor) {
         commit('addNotification', {
           id: 'ntf-' + Date.now(),
           type: 'like',
-          targetType: 'comment',
+          targetType: targetType === 'forum' ? 'forum-comment' : 'comment',
           actor,
           articleId,
           commentId,

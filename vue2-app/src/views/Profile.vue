@@ -21,16 +21,7 @@
         <button class="func-btn" @click="showMyPosts">我的帖子 ({{ userPosts.length }})</button>
         <button class="func-btn" @click="showMyComments">我的评论 ({{ userComments.length }})</button>
         <button class="func-btn" @click="showMyLikes">我的点赞 ({{ userLikes.length }})</button>
-        <div class="message-hover" @click="currentView = 'messages'">
-          <button class="func-btn">消息 ({{ notifications.length }})</button>
-          <div class="message-popover" v-if="notifications && notifications.length">
-            <div v-for="n in notifications.slice(0,5)" :key="n.id" class="message-item" @click.stop="openNotification(n)">
-              <div class="message-actor">{{ n.actor }}</div>
-              <div class="message-text">{{ n.type === 'like' ? '为你点赞' : '留下评论' }}</div>
-              <div class="message-time">{{ formatDate(n.date) }}</div>
-            </div>
-          </div>
-        </div>
+        <button class="func-btn" @click="currentView = 'messages'">消息 ({{ notifications.length }})</button>
         <button class="func-btn" @click="currentView = 'settings'">消息设置</button>
         <button class="func-btn" @click="currentView = 'account'">账号设置</button>
       </div>
@@ -528,17 +519,8 @@ export default {
 }
 
 /* 消息悬停卡片 */
-.message-hover { position: relative; }
-.message-popover {
-  position: absolute; top: 36px; left: 0; width: 260px; background: #fff;
-  border: 1px solid #e5e7eb; border-radius: 8px; box-shadow: 0 8px 20px rgba(0,0,0,0.12);
-  padding: 8px; z-index: 50;
-}
-.message-item { display: grid; grid-template-columns: 1fr auto; gap: 4px 8px; padding: 8px; border-radius: 6px; cursor: pointer; }
-.message-item:hover { background: #f5f7fa; }
-.message-actor { font-weight: 600; color: #2c3e50; }
-.message-text { color: #606266; font-size: 13px; }
-.message-time { color: #909399; font-size: 12px; grid-column: 1 / span 2; }
+/* 移除悬停卡片相关样式（保留类以避免报错，但不显示） */
+.message-hover, .message-popover, .message-item { display: none; }
 
 /* 消息列表 */
 .message-list { display: flex; flex-direction: column; }

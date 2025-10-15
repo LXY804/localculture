@@ -5,39 +5,18 @@
       <input v-model="q" class="search-input" placeholder="搜索论坛帖子..." @keyup.enter="applyFilter" />
     </div>
 
-    <!-- 热门话题区域 -->
-    <div class="hot-topics-section">
-      <h2 class="section-title">🔥 热门话题</h2>
-      <div class="hot-topics-grid">
-        <div 
-          v-for="topic in hotTopics" 
-          :key="topic.id" 
-          class="hot-topic-card"
-          @click="enterTopic(topic)"
-        >
-          <div class="topic-icon">{{ topic.icon }}</div>
-          <div class="topic-info">
-            <h3 class="topic-title">{{ topic.title }}</h3>
-            <p class="topic-desc">{{ topic.description }}</p>
-            <div class="topic-stats">
-              <span class="stat">{{ topic.postCount }} 帖子</span>
-              <span class="stat">{{ topic.memberCount }} 成员</span>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
+    
 
     <!-- 论坛主区域 -->
     <div class="forum-main">
       <div class="forum-header">
-        <h1>交流论坛</h1>
+      <h1>交流论坛</h1>
         <button class="publish-btn" @click="openPostModal">发布帖子</button>
-      </div>
+    </div>
 
-      <div class="tabs">
-        <button v-for="c in categories" :key="c.key" class="tab" :class="{ active: c.key===current }" @click="switchCat(c.key)">{{ c.name }}</button>
-      </div>
+    <div class="tabs">
+      <button v-for="c in categories" :key="c.key" class="tab" :class="{ active: c.key===current }" @click="switchCat(c.key)">{{ c.name }}</button>
+    </div>
 
       <div class="posts-list">
         <div v-for="p in presented" :key="p.id" class="post-card">
@@ -78,7 +57,7 @@
               <span class="btn-icon">💬</span>
               <span class="btn-text">评论 ({{ getCommentCount(p.id) }})</span>
             </button>
-          </div>
+        </div>
         </div>
       </div>
     </div>
@@ -124,6 +103,7 @@
 <script>
 import BaseModal from '@/components/Modal.vue'
 import { mapGetters, mapActions } from 'vuex'
+import forumPosts from '@/data/forumPosts'
 
 export default {
   name: 'ForumPage',
@@ -139,47 +119,8 @@ export default {
         { key: 'craft', name: '手工' },
         { key: 'art', name: '艺术' },
       ],
-      hotTopics: [
-        {
-          id: 'topic1',
-          title: '传统美食文化',
-          description: '分享各地传统美食的制作工艺与文化内涵',
-          icon: '🍜',
-          postCount: 156,
-          memberCount: 892
-        },
-        {
-          id: 'topic2',
-          title: '非遗手工艺',
-          description: '探讨传统手工艺的传承与创新发展',
-          icon: '🎨',
-          postCount: 98,
-          memberCount: 654
-        },
-        {
-          id: 'topic3',
-          title: '民俗节庆',
-          description: '记录和分享各地的传统节庆活动',
-          icon: '🎊',
-          postCount: 234,
-          memberCount: 1205
-        },
-        {
-          id: 'topic4',
-          title: '古建筑保护',
-          description: '关注古建筑的保护与修复工作',
-          icon: '🏛️',
-          postCount: 67,
-          memberCount: 423
-        }
-      ],
-      posts: [
-        { id: 'f1', title: '地方戏曲的前世今生', brief: '从秦腔到越剧的流变与创新。', tags: ['戏曲'], cat: 'art', author: '戏曲爱好者', date: '2025-10-13T13:39:53' },
-        { id: 'f2', title: '徽派建筑赏读', brief: '马头墙与徽州民居美学。', tags: ['建筑'], cat: 'art', author: '建筑学者', date: '2025-10-13T14:39:53' },
-        { id: 'f3', title: '茶马古道的记忆', brief: '古道贸易与民族交流。', tags: ['民俗','茶'], cat: 'folk', author: '历史研究者', date: '2025-10-13T13:39:53' },
-        { id: 'f4', title: '苗绣的纹样语言', brief: '针法与图腾背后的故事。', tags: ['手艺'], cat: 'craft', author: '手工艺人', date: '2025-10-13T12:39:53' },
-        { id: 'f5', title: '地方美食图鉴·早茶', brief: '一盅两件的城市记忆。', tags: ['美食'], cat: 'food', author: '美食博主', date: '2025-10-13T15:39:53' },
-      ],
+      
+      posts: forumPosts,
       showPostModal: false,
       newPost: { cat: 'all', title: '', brief: '' },
       showReplyModal: false,
@@ -211,6 +152,7 @@ export default {
         id: 'f' + (Date.now()),
         title: this.newPost.title,
         brief: this.newPost.brief,
+        content: this.newPost.brief,
         tags: [],
         cat: this.newPost.cat || 'all',
         author: this.$store.getters.username || '匿名用户',
@@ -244,11 +186,6 @@ export default {
     },
     toggleFavorite(postId) {
       this.$store.dispatch('toggleFavorite', postId)
-    },
-    enterTopic(topic) {
-      // 进入话题页面，这里可以跳转到话题详情或过滤相关帖子
-      this.current = topic.id
-      alert(`进入话题：${topic.title}`)
     },
     goToPostDetail(postId) {
       // 跳转到帖子详情页面
@@ -609,14 +546,7 @@ export default {
     padding: 12px;
   }
   
-  .hot-topics-grid {
-    grid-template-columns: 1fr;
-  }
   
-  .hot-topic-card {
-    flex-direction: column;
-    text-align: center;
-  }
   
   .post-actions {
     flex-wrap: wrap;
