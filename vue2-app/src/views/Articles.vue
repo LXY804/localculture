@@ -85,7 +85,12 @@ export default {
     },
     handlePublish(payload) {
       const newId = String(Date.now())
-      const newArticle = { id: newId, date: new Date().toISOString(), ...payload }
+      const newArticle = { 
+        id: newId, 
+        date: new Date().toISOString(), 
+        author: this.$store.getters.username || '匿名用户',
+        ...payload 
+      }
       this.list.unshift(newArticle)
       this.closePublish()
       this.$nextTick(() => {
