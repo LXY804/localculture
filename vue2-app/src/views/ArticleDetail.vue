@@ -39,6 +39,69 @@
         <div class="article-content">
           <div class="content-text">{{ article.content }}</div>
         </div>
+
+        <!-- 互动区域 -->
+        <div class="interaction-section">
+          <div class="interaction-buttons">
+            <button 
+              class="interaction-btn like-btn" 
+              :class="{ active: isLiked }"
+              @click="toggleLike"
+            >
+              <span class="btn-icon">👍</span>
+              <span class="btn-text">{{ isLiked ? '已赞' : '点赞' }}</span>
+            </button>
+            <button 
+              class="interaction-btn favorite-btn" 
+              :class="{ active: isFavorited }"
+              @click="toggleFavorite"
+            >
+              <span class="btn-icon">⭐</span>
+              <span class="btn-text">{{ isFavorited ? '已收藏' : '收藏' }}</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- 评论区域 -->
+        <div class="comments-section">
+          <h3 class="comments-title">评论 ({{ comments.length }})</h3>
+          
+          <!-- 发表评论 -->
+          <div class="comment-form">
+            <textarea 
+              v-model="newComment" 
+              placeholder="写下你的想法..."
+              rows="3"
+              class="comment-input"
+            ></textarea>
+            <button 
+              class="comment-submit-btn" 
+              @click="submitComment"
+              :disabled="!newComment.trim()"
+            >
+              发表评论
+            </button>
+          </div>
+
+          <!-- 评论列表 -->
+          <div class="comments-list">
+            <div 
+              v-for="comment in comments" 
+              :key="comment.id"
+              class="comment-item"
+              :id="'comment-' + comment.id"
+            >
+              <div class="comment-header">
+                <span class="comment-author">{{ comment.author }}</span>
+                <span class="comment-date">{{ formatDate(comment.date) }}</span>
+              </div>
+              <div class="comment-content">{{ comment.content }}</div>
+            </div>
+            <div v-if="comments.length === 0" class="no-comments">
+              暂无评论，快来抢沙发吧！
+            </div>
+          </div>
+        </div>
       </div>
     </template>
     
@@ -52,21 +115,81 @@
 
 <script>
 import articles from '@/data/articles'
+import { mapGetters, mapActions } from 'vuex'
+
 export default {
   name: 'ArticleDetailPage',
   props: { id: String },
+  data() {
+    return {
+      newComment: ''
+    }
+  },
   computed: {
+    ...mapGetters(['isLiked', 'isFavorited', 'getCommentsByArticle']),
     article() {
       const targetId = this.$route.params.id || this.id
       return articles.find(a => a.id === String(targetId)) || null
+    },
+    articleId() {
+      return this.article ? this.article.id : null
+    },
+    isLiked() {
+      return this.articleId ? this.$store.getters.isLiked(this.articleId) : false
+    },
+    isFavorited() {
+      return this.articleId ? this.$store.getters.isFavorited(this.articleId) : false
+    },
+    comments() {
+      return this.articleId ? this.$store.getters.getCommentsByArticle(this.articleId) : []
     }
   },
   methods: {
+    ...mapActions(['toggleLike', 'toggleFavorite', 'addComment']),
     formatDate(iso) {
       if (!iso) return ''
       const d = new Date(iso)
       const p = (n) => String(n).padStart(2, '0')
       return `${d.getFullYear()}年${p(d.getMonth()+1)}月${p(d.getDate())}日 ${p(d.getHours())}:${p(d.getMinutes())}`
+    },
+    toggleLike() {
+      if (!this.articleId) return
+      this.$store.dispatch('toggleLike', this.articleId)
+    },
+    toggleFavorite() {
+      if (!this.articleId) return
+      this.$store.dispatch('toggleFavorite', this.articleId)
+    },
+    async submitComment() {
+      if (!this.newComment.trim() || !this.articleId) return
+      
+      try {
+        await this.$store.dispatch('addComment', {
+          articleId: this.articleId,
+          content: this.newComment.trim()
+        })
+        this.newComment = ''
+        this.$message && this.$message.success('评论发表成功！')
+      } catch (error) {
+        console.error('发表评论失败:', error)
+        alert('评论发表失败，请重试')
+      }
+    }
+  },
+  mounted() {
+    // 检查URL中是否有评论高亮参数
+    const commentId = this.$route.query.highlight
+    if (commentId) {
+      this.$nextTick(() => {
+        const commentEl = document.getElementById('comment-' + commentId)
+        if (commentEl) {
+          commentEl.scrollIntoView({ behavior: 'smooth', block: 'center' })
+          commentEl.classList.add('highlight')
+          setTimeout(() => {
+            commentEl.classList.remove('highlight')
+          }, 3000)
+        }
+      })
     }
   }
 }
@@ -252,6 +375,190 @@ export default {
   box-shadow: 0 8px 20px rgba(102, 126, 234, 0.3);
 }
 
+/* 互动区域 */
+.interaction-section {
+  background: #ffffff;
+  border-radius: 16px;
+  padding: 24px;
+  margin-bottom: 24px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.interaction-buttons {
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+}
+
+.interaction-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 24px;
+  border: 2px solid #e2e8f0;
+  background: #ffffff;
+  border-radius: 25px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.3s ease;
+  color: #4a5568;
+}
+
+.interaction-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
+}
+
+.interaction-btn.active {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-color: #667eea;
+  color: white;
+}
+
+.like-btn.active {
+  background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%);
+  border-color: #ff6b6b;
+}
+
+.favorite-btn.active {
+  background: linear-gradient(135deg, #feca57 0%, #ff9ff3 100%);
+  border-color: #feca57;
+}
+
+.btn-icon {
+  font-size: 16px;
+}
+
+/* 评论区域 */
+.comments-section {
+  background: #ffffff;
+  border-radius: 16px;
+  padding: 32px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.comments-title {
+  color: #2d3748;
+  margin: 0 0 24px 0;
+  font-size: 1.5rem;
+  font-weight: 600;
+}
+
+/* 评论表单 */
+.comment-form {
+  margin-bottom: 32px;
+  padding-bottom: 24px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.comment-input {
+  width: 100%;
+  padding: 16px;
+  border: 2px solid #e2e8f0;
+  border-radius: 12px;
+  font-size: 14px;
+  line-height: 1.5;
+  resize: vertical;
+  min-height: 80px;
+  font-family: inherit;
+  transition: border-color 0.2s ease;
+}
+
+.comment-input:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.comment-submit-btn {
+  margin-top: 12px;
+  padding: 12px 24px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.comment-submit-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(102, 126, 234, 0.3);
+}
+
+.comment-submit-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* 评论列表 */
+.comments-list {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.comment-item {
+  padding: 20px;
+  background: #f8fafc;
+  border-radius: 12px;
+  border-left: 4px solid #667eea;
+  transition: all 0.2s ease;
+}
+
+.comment-item:hover {
+  background: #f1f5f9;
+  transform: translateX(4px);
+}
+
+.comment-item.highlight {
+  background: #fef3c7;
+  border-left-color: #f59e0b;
+  animation: highlightPulse 2s ease-in-out;
+}
+
+@keyframes highlightPulse {
+  0%, 100% { background: #fef3c7; }
+  50% { background: #fde68a; }
+}
+
+.comment-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.comment-author {
+  font-weight: 600;
+  color: #2d3748;
+  font-size: 14px;
+}
+
+.comment-date {
+  color: #718096;
+  font-size: 12px;
+}
+
+.comment-content {
+  color: #4a5568;
+  line-height: 1.6;
+  font-size: 14px;
+}
+
+.no-comments {
+  text-align: center;
+  color: #a0aec0;
+  font-style: italic;
+  padding: 40px 20px;
+}
+
 /* 响应式设计 */
 @media (max-width: 768px) {
   .article-container {
@@ -259,7 +566,9 @@ export default {
   }
   
   .article-header,
-  .article-content {
+  .article-content,
+  .interaction-section,
+  .comments-section {
     padding: 24px;
   }
   
@@ -273,6 +582,17 @@ export default {
   
   .back-section {
     padding: 12px 16px;
+  }
+  
+  .interaction-buttons {
+    flex-direction: column;
+    align-items: center;
+  }
+  
+  .interaction-btn {
+    width: 100%;
+    max-width: 200px;
+    justify-content: center;
   }
 }
 </style>
