@@ -3,7 +3,6 @@
     <!-- 搜索区域 -->
     <div class="search-section">
       <input v-model="q" class="search-input" placeholder="搜索论坛帖子..." @keyup.enter="applyFilter" />
-      <button class="search-btn" @click="applyFilter">搜索</button>
     </div>
 
     <!-- 热门话题区域 -->

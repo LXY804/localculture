@@ -96,6 +96,16 @@
                 <span class="comment-date">{{ formatDate(comment.date) }}</span>
               </div>
               <div class="comment-content">{{ comment.content }}</div>
+              <div class="comment-actions">
+                <button 
+                  class="comment-like-btn"
+                  :class="{ active: isCommentLiked(comment.id) }"
+                  @click="onToggleCommentLike(comment)"
+                >
+                  <span class="btn-icon">👍</span>
+                  <span class="btn-text">{{ isCommentLiked(comment.id) ? '已赞' : '点赞' }}</span>
+                </button>
+              </div>
             </div>
             <div v-if="comments.length === 0" class="no-comments">
               暂无评论，快来抢沙发吧！
@@ -126,7 +136,7 @@ export default {
     }
   },
   computed: {
-    ...mapGetters(['isLiked', 'isFavorited', 'getCommentsByArticle']),
+    ...mapGetters(['isLiked', 'isFavorited', 'getCommentsByArticle', 'isCommentLiked']),
     article() {
       const targetId = this.$route.params.id || this.id
       return articles.find(a => a.id === String(targetId)) || null
@@ -145,7 +155,7 @@ export default {
     }
   },
   methods: {
-    ...mapActions(['toggleLike', 'toggleFavorite', 'addComment']),
+    ...mapActions(['toggleLike', 'toggleFavorite', 'addComment', 'toggleCommentLike']),
     formatDate(iso) {
       if (!iso) return ''
       const d = new Date(iso)
@@ -174,6 +184,14 @@ export default {
         console.error('发表评论失败:', error)
         alert('评论发表失败，请重试')
       }
+    }
+    ,
+    onToggleCommentLike(comment) {
+      this.$store.dispatch('toggleCommentLike', {
+        commentId: comment.id,
+        articleId: this.articleId,
+        commentAuthor: comment.author
+      })
     }
   },
   mounted() {
@@ -551,6 +569,13 @@ export default {
   line-height: 1.6;
   font-size: 14px;
 }
+
+.comment-actions { margin-top: 8px; }
+.comment-like-btn { 
+  display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; 
+  border: 1px solid #d1d5db; background: #fff; border-radius: 16px; cursor: pointer; font-size: 12px; color: #6b7280;
+}
+.comment-like-btn.active { background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%); border-color: #ff6b6b; color: #fff; }
 
 .no-comments {
   text-align: center;

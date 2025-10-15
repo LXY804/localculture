@@ -21,6 +21,16 @@
         <button class="func-btn" @click="showMyPosts">我的帖子 ({{ userPosts.length }})</button>
         <button class="func-btn" @click="showMyComments">我的评论 ({{ userComments.length }})</button>
         <button class="func-btn" @click="showMyLikes">我的点赞 ({{ userLikes.length }})</button>
+        <div class="message-hover" @click="currentView = 'messages'">
+          <button class="func-btn">消息 ({{ notifications.length }})</button>
+          <div class="message-popover" v-if="notifications && notifications.length">
+            <div v-for="n in notifications.slice(0,5)" :key="n.id" class="message-item" @click.stop="openNotification(n)">
+              <div class="message-actor">{{ n.actor }}</div>
+              <div class="message-text">{{ n.type === 'like' ? '为你点赞' : '留下评论' }}</div>
+              <div class="message-time">{{ formatDate(n.date) }}</div>
+            </div>
+          </div>
+        </div>
         <button class="func-btn" @click="currentView = 'settings'">消息设置</button>
         <button class="func-btn" @click="currentView = 'account'">账号设置</button>
       </div>
@@ -94,6 +104,21 @@
                   <span class="like-date">{{ formatDate(like.date) }}</span>
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+
+        <div v-if="currentView === 'messages'" class="content-section">
+          <h3>消息通知</h3>
+          <div v-if="!notifications.length" class="empty-state">暂无消息</div>
+          <div v-else class="message-list">
+            <div v-for="n in notifications" :key="n.id" class="message-row" @click="openNotification(n)">
+              <div class="message-main">
+                <span class="message-actor">{{ n.actor }}</span>
+                <span class="message-text">{{ n.type === 'like' ? '为你点赞' : '留下评论' }}</span>
+                <span class="message-excerpt" v-if="n.excerpt">：{{ n.excerpt }}</span>
+              </div>
+              <div class="message-aside">{{ formatDate(n.date) }}</div>
             </div>
           </div>
         </div>
@@ -322,7 +347,7 @@ export default {
     }
   },
   computed: {
-    ...mapGetters(['userActivities', 'username']),
+    ...mapGetters(['userActivities', 'username', 'notifications']),
     userCollections() {
       return this.userActivities.favorites.map(articleId => {
         const article = articles.find(a => a.id === articleId)
@@ -376,6 +401,13 @@ export default {
         params: { id: articleId },
         query: { highlight: commentId }
       })
+    },
+    openNotification(n) {
+      if (n.targetType === 'article') {
+        this.$router.push({ name: 'article-detail', params: { id: n.articleId } })
+      } else if (n.targetType === 'comment') {
+        this.$router.push({ name: 'article-detail', params: { id: n.articleId }, query: { highlight: n.commentId } })
+      }
     },
     getStatusText(status) {
       const statusMap = {
@@ -494,6 +526,27 @@ export default {
   border-color: #42b983;
   color: #42b983;
 }
+
+/* 消息悬停卡片 */
+.message-hover { position: relative; }
+.message-popover {
+  position: absolute; top: 36px; left: 0; width: 260px; background: #fff;
+  border: 1px solid #e5e7eb; border-radius: 8px; box-shadow: 0 8px 20px rgba(0,0,0,0.12);
+  padding: 8px; z-index: 50;
+}
+.message-item { display: grid; grid-template-columns: 1fr auto; gap: 4px 8px; padding: 8px; border-radius: 6px; cursor: pointer; }
+.message-item:hover { background: #f5f7fa; }
+.message-actor { font-weight: 600; color: #2c3e50; }
+.message-text { color: #606266; font-size: 13px; }
+.message-time { color: #909399; font-size: 12px; grid-column: 1 / span 2; }
+
+/* 消息列表 */
+.message-list { display: flex; flex-direction: column; }
+.message-row { display: grid; grid-template-columns: 1fr auto; gap: 8px; padding: 12px; border-bottom: 1px solid #f0f0f0; cursor: pointer; }
+.message-row:hover { background: #f9fafb; }
+.message-main { color: #2c3e50; }
+.message-excerpt { color: #606266; }
+.message-aside { color: #909399; font-size: 12px; }
 
 /* 内容展示区域 */
 .content-area {

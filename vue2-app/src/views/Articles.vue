@@ -2,7 +2,6 @@
   <div class="page">
     <div class="search-section">
       <input v-model="localQ" class="search-input" placeholder="搜索标题/摘要" @keyup.enter="applyFilter" />
-      <button class="search-btn" @click="applyFilter">搜索</button>
     </div>
     
     <div class="header">
