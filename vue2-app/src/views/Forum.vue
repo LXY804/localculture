@@ -1,31 +1,85 @@
 <template>
   <div class="page">
-    <div class="header">
-      <h1>交流论坛</h1>
-      <div class="searchbar">
-        <input v-model="q" placeholder="关键词" @keyup.enter="applyFilter" />
-        <button @click="applyFilter">查询</button>
-        <button class="publish-btn" @click="openPostModal">发帖</button>
+    <!-- 搜索区域 -->
+    <div class="search-section">
+      <input v-model="q" class="search-input" placeholder="搜索论坛帖子..." @keyup.enter="applyFilter" />
+      <button class="search-btn" @click="applyFilter">搜索</button>
+    </div>
+
+    <!-- 热门话题区域 -->
+    <div class="hot-topics-section">
+      <h2 class="section-title">🔥 热门话题</h2>
+      <div class="hot-topics-grid">
+        <div 
+          v-for="topic in hotTopics" 
+          :key="topic.id" 
+          class="hot-topic-card"
+          @click="enterTopic(topic)"
+        >
+          <div class="topic-icon">{{ topic.icon }}</div>
+          <div class="topic-info">
+            <h3 class="topic-title">{{ topic.title }}</h3>
+            <p class="topic-desc">{{ topic.description }}</p>
+            <div class="topic-stats">
+              <span class="stat">{{ topic.postCount }} 帖子</span>
+              <span class="stat">{{ topic.memberCount }} 成员</span>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 
-    <div class="tabs">
-      <button v-for="c in categories" :key="c.key" class="tab" :class="{ active: c.key===current }" @click="switchCat(c.key)">{{ c.name }}</button>
-    </div>
+    <!-- 论坛主区域 -->
+    <div class="forum-main">
+      <div class="forum-header">
+        <h1>交流论坛</h1>
+        <button class="publish-btn" @click="openPostModal">发布帖子</button>
+      </div>
 
-    <div class="list">
-      <div v-for="p in presented" :key="p.id" class="row">
-        <img class="thumb" :src="p.img" alt="thumb" />
-        <div class="info">
-          <div class="title">{{ p.title }}</div>
-          <div class="brief">{{ p.brief }}</div>
-          <div class="tags">
+      <div class="tabs">
+        <button v-for="c in categories" :key="c.key" class="tab" :class="{ active: c.key===current }" @click="switchCat(c.key)">{{ c.name }}</button>
+      </div>
+
+      <div class="posts-list">
+        <div v-for="p in presented" :key="p.id" class="post-card">
+          <div class="post-header">
+            <div class="post-info">
+              <h3 class="post-title" @click="goToPostDetail(p.id)">{{ p.title }}</h3>
+              <p class="post-brief">{{ p.brief }}</p>
+              <div class="post-meta">
+                <span class="post-author">作者：{{ p.author }}</span>
+                <span class="post-date">{{ formatDate(p.date) }}</span>
+                <span class="post-category">{{ getCategoryName(p.cat) }}</span>
+              </div>
+            </div>
+          </div>
+          
+          <div class="post-tags" v-if="p.tags && p.tags.length">
             <span class="tag" v-for="t in p.tags" :key="t"># {{ t }}</span>
           </div>
-        </div>
-        <div class="meta">
-          <div>{{ formatDate(p.date) }}</div>
-          <button class="reply-btn" @click="openReplyModal(p)">回复</button>
+
+          <div class="post-actions">
+            <button 
+              class="action-btn like-btn" 
+              :class="{ active: isLiked(p.id) }"
+              @click.stop="toggleLike(p.id)"
+            >
+              <span class="btn-icon">👍</span>
+              <span class="btn-text">{{ isLiked(p.id) ? '已赞' : '点赞' }}</span>
+            </button>
+            <button 
+              class="action-btn favorite-btn" 
+              :class="{ active: isFavorited(p.id) }"
+              @click.stop="toggleFavorite(p.id)"
+            >
+              <span class="btn-icon">⭐</span>
+              <span class="btn-text">{{ isFavorited(p.id) ? '已收藏' : '收藏' }}</span>
+            </button>
+            <button class="action-btn comment-btn" @click.stop="goToPostDetail(p.id)">
+              <span class="btn-icon">💬</span>
+              <span class="btn-text">评论 ({{ getCommentCount(p.id) }})</span>
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -69,8 +123,9 @@
 </template>
 
 <script>
-import cover from '@/assets/logo.png'
 import BaseModal from '@/components/Modal.vue'
+import { mapGetters, mapActions } from 'vuex'
+
 export default {
   name: 'ForumPage',
   components: { BaseModal },
@@ -85,12 +140,46 @@ export default {
         { key: 'craft', name: '手工' },
         { key: 'art', name: '艺术' },
       ],
+      hotTopics: [
+        {
+          id: 'topic1',
+          title: '传统美食文化',
+          description: '分享各地传统美食的制作工艺与文化内涵',
+          icon: '🍜',
+          postCount: 156,
+          memberCount: 892
+        },
+        {
+          id: 'topic2',
+          title: '非遗手工艺',
+          description: '探讨传统手工艺的传承与创新发展',
+          icon: '🎨',
+          postCount: 98,
+          memberCount: 654
+        },
+        {
+          id: 'topic3',
+          title: '民俗节庆',
+          description: '记录和分享各地的传统节庆活动',
+          icon: '🎊',
+          postCount: 234,
+          memberCount: 1205
+        },
+        {
+          id: 'topic4',
+          title: '古建筑保护',
+          description: '关注古建筑的保护与修复工作',
+          icon: '🏛️',
+          postCount: 67,
+          memberCount: 423
+        }
+      ],
       posts: [
-        { id: 'f1', title: '地方戏曲的前世今生', brief: '从秦腔到越剧的流变与创新。', tags: ['戏曲'], cat: 'art', img: cover, date: '2025-10-13T13:39:53' },
-        { id: 'f2', title: '徽派建筑赏读', brief: '马头墙与徽州民居美学。', tags: ['建筑'], cat: 'art', img: cover, date: '2025-10-13T14:39:53' },
-        { id: 'f3', title: '茶马古道的记忆', brief: '古道贸易与民族交流。', tags: ['民俗','茶'], cat: 'folk', img: cover, date: '2025-10-13T13:39:53' },
-        { id: 'f4', title: '苗绣的纹样语言', brief: '针法与图腾背后的故事。', tags: ['手艺'], cat: 'craft', img: cover, date: '2025-10-13T12:39:53' },
-        { id: 'f5', title: '地方美食图鉴·早茶', brief: '一盅两件的城市记忆。', tags: ['美食'], cat: 'food', img: cover, date: '2025-10-13T15:39:53' },
+        { id: 'f1', title: '地方戏曲的前世今生', brief: '从秦腔到越剧的流变与创新。', tags: ['戏曲'], cat: 'art', author: '戏曲爱好者', date: '2025-10-13T13:39:53' },
+        { id: 'f2', title: '徽派建筑赏读', brief: '马头墙与徽州民居美学。', tags: ['建筑'], cat: 'art', author: '建筑学者', date: '2025-10-13T14:39:53' },
+        { id: 'f3', title: '茶马古道的记忆', brief: '古道贸易与民族交流。', tags: ['民俗','茶'], cat: 'folk', author: '历史研究者', date: '2025-10-13T13:39:53' },
+        { id: 'f4', title: '苗绣的纹样语言', brief: '针法与图腾背后的故事。', tags: ['手艺'], cat: 'craft', author: '手工艺人', date: '2025-10-13T12:39:53' },
+        { id: 'f5', title: '地方美食图鉴·早茶', brief: '一盅两件的城市记忆。', tags: ['美食'], cat: 'food', author: '美食博主', date: '2025-10-13T15:39:53' },
       ],
       showPostModal: false,
       newPost: { cat: 'all', title: '', brief: '' },
@@ -100,6 +189,7 @@ export default {
     }
   },
   computed: {
+    ...mapGetters(['isLiked', 'isFavorited', 'getCommentsByArticle']),
     filtered() {
       const q = (this.q || '').toLowerCase()
       return this.posts.filter(p =>
@@ -112,6 +202,7 @@ export default {
     }
   },
   methods: {
+    ...mapActions(['toggleLike', 'toggleFavorite']),
     switchCat(key) { this.current = key },
     applyFilter() {},
     openPostModal() { this.showPostModal = true },
@@ -123,7 +214,7 @@ export default {
         brief: this.newPost.brief,
         tags: [],
         cat: this.newPost.cat || 'all',
-        img: cover,
+        author: this.$store.getters.username || '匿名用户',
         date: new Date().toISOString(),
       }
       this.posts.unshift(post)
@@ -141,39 +232,403 @@ export default {
     formatDate(iso) {
       const d = new Date(iso); const p=n=>String(n).padStart(2,'0')
       return `${d.getFullYear()}/${p(d.getMonth()+1)}/${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`
+    },
+    getCategoryName(catKey) {
+      const category = this.categories.find(c => c.key === catKey)
+      return category ? category.name : '未知'
+    },
+    getCommentCount(postId) {
+      return this.$store.getters.getCommentsByArticle(postId).length
+    },
+    toggleLike(postId) {
+      this.$store.dispatch('toggleLike', postId)
+    },
+    toggleFavorite(postId) {
+      this.$store.dispatch('toggleFavorite', postId)
+    },
+    enterTopic(topic) {
+      // 进入话题页面，这里可以跳转到话题详情或过滤相关帖子
+      this.current = topic.id
+      alert(`进入话题：${topic.title}`)
+    },
+    goToPostDetail(postId) {
+      // 跳转到帖子详情页面
+      this.$router.push({ name: 'forum-post-detail', params: { id: postId } })
     }
   }
 }
 </script>
 
 <style scoped>
-.page { padding: 16px; width: 75%; margin: 0 auto; }
-.header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
-.searchbar { display: inline-flex; gap: 6px; }
-.searchbar input { padding: 6px 10px; border: 1px solid #e5e7eb; border-radius: 6px; }
-.searchbar button { padding: 6px 10px; border: 1px solid #dcdfe6; background: #fff; border-radius: 6px; cursor: pointer; }
-.publish-btn { background: #cf2f25 !important; color: #fff !important; border-color: #cf2f25 !important; }
+.page { 
+  padding: 16px; 
+  width: 75%; 
+  margin: 0 auto; 
+  background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+  min-height: 100vh;
+}
 
-.tabs { display: flex; gap: 8px; border-bottom: 2px solid #cf2f25; padding: 6px 0; margin-bottom: 8px; }
-.tab { padding: 4px 10px; border-radius: 4px; background: #cf2f25; color: #fff; border: none; cursor: pointer; }
-.tab.active { background: #aa241c; }
+/* 搜索区域 */
+.search-section {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 24px;
+  padding: 16px;
+  background: #ffffff;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
 
-.list { background: #f7f9f5; border: 1px solid #e6e9ef; }
-.row { display: grid; grid-template-columns: 86px 1fr auto; align-items: center; gap: 12px; padding: 12px; border-bottom: 2px solid #cf2f25; }
-.thumb { width: 86px; height: 56px; object-fit: cover; background: #eee; }
-.info { overflow: hidden; }
-.title { font-weight: 700; color: #1f2d3d; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.brief { color: #6b7280; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.tags { margin-top: 4px; display: flex; gap: 8px; }
-.tag { background: #f3f4f6; border-radius: 12px; padding: 2px 8px; font-size: 12px; color: #374151; }
-.meta { color: #6b7280; font-size: 12px; display: grid; gap: 8px; justify-items: end; }
-.reply-btn { border: 1px solid #dcdfe6; background: #fff; border-radius: 4px; padding: 4px 10px; cursor: pointer; }
-.reply-btn:hover { background: #f2f3f5; }
+.search-input {
+  flex: 1;
+  padding: 12px 16px;
+  border: 2px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 16px;
+  transition: border-color 0.2s ease;
+}
 
+.search-input:focus {
+  outline: none;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+.search-btn {
+  padding: 12px 24px;
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.search-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(37, 99, 235, 0.3);
+}
+
+/* 热门话题区域 */
+.hot-topics-section {
+  margin-bottom: 32px;
+}
+
+.section-title {
+  color: #1f2937;
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin-bottom: 16px;
+  text-align: center;
+}
+
+.hot-topics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+.hot-topic-card {
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 20px;
+  border: 1px solid #e2e8f0;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.hot-topic-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.15);
+  border-color: #2563eb;
+}
+
+.topic-icon {
+  font-size: 2.5rem;
+  flex-shrink: 0;
+}
+
+.topic-info {
+  flex: 1;
+}
+
+.topic-title {
+  color: #1f2937;
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin: 0 0 8px 0;
+}
+
+.topic-desc {
+  color: #6b7280;
+  font-size: 0.9rem;
+  margin: 0 0 12px 0;
+  line-height: 1.4;
+}
+
+.topic-stats {
+  display: flex;
+  gap: 16px;
+}
+
+.stat {
+  color: #9ca3af;
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+/* 论坛主区域 */
+.forum-main {
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.forum-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.forum-header h1 {
+  color: #1f2937;
+  font-size: 1.8rem;
+  font-weight: 700;
+  margin: 0;
+}
+
+.publish-btn {
+  background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+  color: white;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.publish-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(220, 38, 38, 0.3);
+}
+
+/* 分类标签 */
+.tabs {
+  display: flex;
+  gap: 8px;
+  border-bottom: 2px solid #e2e8f0;
+  padding: 8px 0;
+  margin-bottom: 20px;
+}
+
+.tab {
+  padding: 8px 16px;
+  border-radius: 6px;
+  background: #f3f4f6;
+  color: #6b7280;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.tab:hover {
+  background: #e5e7eb;
+  color: #374151;
+}
+
+.tab.active {
+  background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+  color: white;
+}
+
+/* 帖子列表 */
+.posts-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.post-card {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 20px;
+  transition: all 0.2s ease;
+}
+
+.post-card:hover {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.post-header {
+  margin-bottom: 12px;
+}
+
+.post-title {
+  color: #1f2937;
+  font-size: 1.2rem;
+  font-weight: 600;
+  margin: 0 0 8px 0;
+  cursor: pointer;
+  transition: color 0.2s ease;
+}
+
+.post-title:hover {
+  color: #2563eb;
+}
+
+.post-brief {
+  color: #6b7280;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  margin: 0 0 12px 0;
+}
+
+.post-meta {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  font-size: 0.8rem;
+  color: #9ca3af;
+}
+
+.post-author {
+  color: #2563eb;
+  font-weight: 500;
+}
+
+.post-category {
+  background: #e0e7ff;
+  color: #3730a3;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.post-tags {
+  margin-bottom: 16px;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.tag {
+  background: #f3f4f6;
+  color: #374151;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+/* 帖子操作按钮 */
+.post-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.action-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border: 1px solid #d1d5db;
+  background: #ffffff;
+  border-radius: 20px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  color: #6b7280;
+}
+
+.action-btn:hover {
+  background: #f9fafb;
+  transform: translateY(-1px);
+}
+
+.action-btn.active {
+  color: white;
+}
+
+.like-btn.active {
+  background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%);
+  border-color: #ff6b6b;
+}
+
+.favorite-btn.active {
+  background: linear-gradient(135deg, #feca57 0%, #ff9ff3 100%);
+  border-color: #feca57;
+}
+
+.comment-btn:hover {
+  background: #e0f2fe;
+  border-color: #0ea5e9;
+  color: #0ea5e9;
+}
+
+.btn-icon {
+  font-size: 1rem;
+}
+
+.btn-text {
+  font-size: 0.8rem;
+}
+
+/* 表单样式 */
 .form-col { display: grid; gap: 10px; }
-.form-col input, .form-col textarea, .form-col select { width: 100%; padding: 8px 10px; border: 1px solid #e5e7eb; border-radius: 6px; }
+.form-col input, .form-col textarea, .form-col select { 
+  width: 100%; 
+  padding: 8px 10px; 
+  border: 1px solid #e5e7eb; 
+  border-radius: 6px; 
+}
 .dialog-actions { display: flex; gap: 8px; justify-content: flex-end; }
 .dialog-actions .ghost { background: #f3f4f6; border: 1px solid #e5e7eb; }
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .page {
+    width: 95%;
+    padding: 12px;
+  }
+  
+  .hot-topics-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .hot-topic-card {
+    flex-direction: column;
+    text-align: center;
+  }
+  
+  .post-actions {
+    flex-wrap: wrap;
+  }
+  
+  .action-btn {
+    flex: 1;
+    min-width: 120px;
+    justify-content: center;
+  }
+}
 </style>
 
 
