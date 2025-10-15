@@ -24,8 +24,22 @@
           <div class="meta">
             <span>{{ formatDate(a.date) }}</span>
             <div class="ops">
-              <button class="btn">点赞</button>
-              <button class="btn">收藏</button>
+              <button 
+                class="btn like-btn" 
+                :class="{ active: isLiked(a.id) }"
+                @click.stop="toggleLike(a.id)"
+              >
+                <span class="btn-icon">👍</span>
+                {{ isLiked(a.id) ? '已赞' : '点赞' }}
+              </button>
+              <button 
+                class="btn favorite-btn" 
+                :class="{ active: isFavorited(a.id) }"
+                @click.stop="toggleFavorite(a.id)"
+              >
+                <span class="btn-icon">⭐</span>
+                {{ isFavorited(a.id) ? '已收藏' : '收藏' }}
+              </button>
             </div>
           </div>
         </div>
@@ -43,6 +57,8 @@
 import articles from '@/data/articles'
 import BaseModal from '@/components/Modal.vue'
 import ArticlePublishForm from '@/components/ArticlePublishForm.vue'
+import { mapGetters, mapActions } from 'vuex'
+
 export default {
   name: 'ArticlesPage',
   data() {
@@ -50,6 +66,7 @@ export default {
   },
   components: { BaseModal, ArticlePublishForm },
   computed: {
+    ...mapGetters(['isLiked', 'isFavorited']),
     filtered() {
       const q = (this.localQ || '').toLowerCase()
       if (!q) return this.list
@@ -72,6 +89,7 @@ export default {
     '$route.query.q'(v) { this.localQ = v || '' }
   },
   methods: {
+    ...mapActions(['toggleLike', 'toggleFavorite']),
     openPublish() { this.showPublish = true },
     closePublish() { this.showPublish = false },
     applyFilter() {
@@ -97,6 +115,12 @@ export default {
         alert('发布成功！')
         this.$router.push({ name: 'article-detail', params: { id: newId }, query: { from: 'list' } })
       })
+    },
+    toggleLike(articleId) {
+      this.$store.dispatch('toggleLike', articleId)
+    },
+    toggleFavorite(articleId) {
+      this.$store.dispatch('toggleFavorite', articleId)
     }
   }
 }
@@ -120,9 +144,50 @@ export default {
 .tag { background: #f3f4f6; border-radius: 12px; padding: 2px 8px; font-size: 12px; color: #374151; }
 .meta { display: flex; align-items: center; justify-content: space-between; color: #6b7280; font-size: 12px; }
 .ops { display: flex; gap: 8px; }
-.btn { border: 1px solid #dcdfe6; background: #fff; border-radius: 4px; padding: 4px 10px; cursor: pointer; }
+.btn { 
+  border: 1px solid #dcdfe6; 
+  background: #fff; 
+  border-radius: 4px; 
+  padding: 4px 10px; 
+  cursor: pointer; 
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  transition: all 0.2s ease;
+}
 .btn:hover { background: #f2f3f5; }
 .btn.primary { background: #2563eb; border-color: #2563eb; color: #fff; }
+
+/* 点赞按钮样式 */
+.like-btn.active {
+  background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%);
+  border-color: #ff6b6b;
+  color: white;
+}
+
+.like-btn:hover:not(.active) {
+  background: #ffe0e0;
+  border-color: #ff6b6b;
+  color: #ff6b6b;
+}
+
+/* 收藏按钮样式 */
+.favorite-btn.active {
+  background: linear-gradient(135deg, #feca57 0%, #ff9ff3 100%);
+  border-color: #feca57;
+  color: white;
+}
+
+.favorite-btn:hover:not(.active) {
+  background: #fff3cd;
+  border-color: #feca57;
+  color: #feca57;
+}
+
+.btn-icon {
+  font-size: 12px;
+}
 </style>
 
 
