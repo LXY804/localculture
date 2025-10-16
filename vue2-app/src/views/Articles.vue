@@ -1,8 +1,11 @@
 <template>
   <div class="page">
+    <div class="search-section">
+      <input v-model="localQ" class="search-input" placeholder="搜索标题/摘要" @keyup.enter="applyFilter" />
+    </div>
+    
     <div class="header">
       <h1>文章列表</h1>
-      <input v-model="localQ" class="search after-title" placeholder="搜索标题/摘要" @keyup.enter="applyFilter" />
       <div class="actions">
         <button class="btn primary" @click="openPublish">发布文章</button>
         <select v-model="sortBy">
@@ -24,8 +27,22 @@
           <div class="meta">
             <span>{{ formatDate(a.date) }}</span>
             <div class="ops">
-              <button class="btn">点赞</button>
-              <button class="btn">收藏</button>
+              <button 
+                class="btn like-btn" 
+                :class="{ active: isLiked(a.id) }"
+                @click.stop="toggleLike(a.id)"
+              >
+                <span class="btn-icon">👍</span>
+                {{ isLiked(a.id) ? '已赞' : '点赞' }}
+              </button>
+              <button 
+                class="btn favorite-btn" 
+                :class="{ active: isFavorited(a.id) }"
+                @click.stop="toggleFavorite(a.id)"
+              >
+                <span class="btn-icon">⭐</span>
+                {{ isFavorited(a.id) ? '已收藏' : '收藏' }}
+              </button>
             </div>
           </div>
         </div>
@@ -43,6 +60,8 @@
 import articles from '@/data/articles'
 import BaseModal from '@/components/Modal.vue'
 import ArticlePublishForm from '@/components/ArticlePublishForm.vue'
+import { mapGetters, mapActions } from 'vuex'
+
 export default {
   name: 'ArticlesPage',
   data() {
@@ -50,6 +69,7 @@ export default {
   },
   components: { BaseModal, ArticlePublishForm },
   computed: {
+    ...mapGetters(['isLiked', 'isFavorited']),
     filtered() {
       const q = (this.localQ || '').toLowerCase()
       if (!q) return this.list
@@ -72,6 +92,7 @@ export default {
     '$route.query.q'(v) { this.localQ = v || '' }
   },
   methods: {
+    ...mapActions(['toggleLike', 'toggleFavorite']),
     openPublish() { this.showPublish = true },
     closePublish() { this.showPublish = false },
     applyFilter() {
@@ -85,13 +106,24 @@ export default {
     },
     handlePublish(payload) {
       const newId = String(Date.now())
-      const newArticle = { id: newId, date: new Date().toISOString(), ...payload }
+      const newArticle = { 
+        id: newId, 
+        date: new Date().toISOString(), 
+        author: this.$store.getters.username || '匿名用户',
+        ...payload 
+      }
       this.list.unshift(newArticle)
       this.closePublish()
       this.$nextTick(() => {
         alert('发布成功！')
         this.$router.push({ name: 'article-detail', params: { id: newId }, query: { from: 'list' } })
       })
+    },
+    toggleLike(articleId) {
+      this.$store.dispatch('toggleLike', articleId)
+    },
+    toggleFavorite(articleId) {
+      this.$store.dispatch('toggleFavorite', articleId)
     }
   }
 }
@@ -99,10 +131,52 @@ export default {
 
 <style scoped>
 .page { padding: 16px; width: 75%; margin: 0 auto; }
-.header { display: grid; grid-template-columns: auto auto 1fr auto; align-items: center; gap: 12px; margin-bottom: 12px; }
+
+/* 搜索区域 */
+.search-section {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 24px;
+  padding: 16px;
+  background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+}
+
+.search-input {
+  flex: 1;
+  padding: 12px 16px;
+  border: 2px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 16px;
+  transition: border-color 0.2s ease;
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+.search-btn {
+  padding: 12px 24px;
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.search-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(37, 99, 235, 0.3);
+}
+
+.header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
 .actions { display: inline-flex; gap: 8px; align-items: center; }
-.search { padding: 6px 10px; border: 1px solid #e5e7eb; border-radius: 6px; }
-.after-title { min-width: 220px; }
 
 .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
 .card { display: grid; grid-template-columns: 1fr 1fr; background: #fff; border: 1px solid #eceff3; border-radius: 10px; overflow: hidden; }
@@ -115,9 +189,50 @@ export default {
 .tag { background: #f3f4f6; border-radius: 12px; padding: 2px 8px; font-size: 12px; color: #374151; }
 .meta { display: flex; align-items: center; justify-content: space-between; color: #6b7280; font-size: 12px; }
 .ops { display: flex; gap: 8px; }
-.btn { border: 1px solid #dcdfe6; background: #fff; border-radius: 4px; padding: 4px 10px; cursor: pointer; }
+.btn { 
+  border: 1px solid #dcdfe6; 
+  background: #fff; 
+  border-radius: 4px; 
+  padding: 4px 10px; 
+  cursor: pointer; 
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  transition: all 0.2s ease;
+}
 .btn:hover { background: #f2f3f5; }
 .btn.primary { background: #2563eb; border-color: #2563eb; color: #fff; }
+
+/* 点赞按钮样式 */
+.like-btn.active {
+  background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%);
+  border-color: #ff6b6b;
+  color: white;
+}
+
+.like-btn:hover:not(.active) {
+  background: #ffe0e0;
+  border-color: #ff6b6b;
+  color: #ff6b6b;
+}
+
+/* 收藏按钮样式 */
+.favorite-btn.active {
+  background: linear-gradient(135deg, #feca57 0%, #ff9ff3 100%);
+  border-color: #feca57;
+  color: white;
+}
+
+.favorite-btn:hover:not(.active) {
+  background: #fff3cd;
+  border-color: #feca57;
+  color: #feca57;
+}
+
+.btn-icon {
+  font-size: 12px;
+}
 </style>
 
 

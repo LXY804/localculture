@@ -6,11 +6,17 @@ Vue.use(Vuex)
 // 从本地存储恢复初始状态
 let persistedToken = null
 let persistedProfile = null
+let persistedUserActivities = null
+let persistedNotifications = null
 if (typeof localStorage !== 'undefined') {
   const t = localStorage.getItem('authToken')
   const p = localStorage.getItem('userProfile')
+  const a = localStorage.getItem('userActivities')
+  const n = localStorage.getItem('notifications')
   persistedToken = t || null
   persistedProfile = p ? JSON.parse(p) : null
+  persistedUserActivities = a ? JSON.parse(a) : null
+  persistedNotifications = n ? JSON.parse(n) : null
 }
 
 // 简化的本地认证与角色状态（演示用）
@@ -18,11 +24,24 @@ export default new Vuex.Store({
   state: {
     authToken: persistedToken,
     userProfile: persistedProfile, // { id, username, role: 'user' | 'admin' }
+    userActivities: persistedUserActivities || {
+      likes: [], // 点赞的文章ID列表
+      favorites: [], // 收藏的文章ID列表
+      comments: [], // 评论列表 { id, articleId, content, date, author }
+      commentLikes: [], // 被点赞的评论ID（仅本地记录，不计入“我的点赞”）
+    },
+    notifications: persistedNotifications || [], // { id, type:'like'|'comment', targetType:'article'|'comment', actor, articleId, commentId?, date, excerpt }
   },
   getters: {
     isAuthenticated: (state) => !!state.authToken,
     currentRole: (state) => (state.userProfile && state.userProfile.role) || 'guest',
     username: (state) => (state.userProfile && state.userProfile.username) || '',
+    userActivities: (state) => state.userActivities,
+    isLiked: (state) => (articleId) => state.userActivities.likes.includes(articleId),
+    isFavorited: (state) => (articleId) => state.userActivities.favorites.includes(articleId),
+    getCommentsByArticle: (state) => (articleId) => state.userActivities.comments.filter(c => c.articleId === articleId),
+    isCommentLiked: (state) => (commentId) => state.userActivities.commentLikes.includes(commentId),
+    notifications: (state) => state.notifications,
   },
   mutations: {
     setAuth(state, { token, profile }) {
@@ -36,9 +55,55 @@ export default new Vuex.Store({
     clearAuth(state) {
       state.authToken = null
       state.userProfile = null
+      state.userActivities = { likes: [], favorites: [], comments: [], commentLikes: [] }
+      state.notifications = []
       if (typeof localStorage !== 'undefined') {
         localStorage.removeItem('authToken')
         localStorage.removeItem('userProfile')
+        localStorage.removeItem('userActivities')
+        localStorage.removeItem('notifications')
+      }
+    },
+    toggleLike(state, articleId) {
+      const index = state.userActivities.likes.indexOf(articleId)
+      if (index > -1) {
+        state.userActivities.likes.splice(index, 1)
+      } else {
+        state.userActivities.likes.push(articleId)
+      }
+      this.commit('saveUserActivities')
+    },
+    toggleFavorite(state, articleId) {
+      const index = state.userActivities.favorites.indexOf(articleId)
+      if (index > -1) {
+        state.userActivities.favorites.splice(index, 1)
+      } else {
+        state.userActivities.favorites.push(articleId)
+      }
+      this.commit('saveUserActivities')
+    },
+    addComment(state, comment) {
+      state.userActivities.comments.push(comment)
+      this.commit('saveUserActivities')
+    },
+    toggleCommentLike(state, commentId) {
+      const idx = state.userActivities.commentLikes.indexOf(commentId)
+      if (idx > -1) state.userActivities.commentLikes.splice(idx, 1)
+      else state.userActivities.commentLikes.push(commentId)
+      this.commit('saveUserActivities')
+    },
+    addNotification(state, notification) {
+      state.notifications.unshift(notification)
+      this.commit('saveNotifications')
+    },
+    saveUserActivities(state) {
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem('userActivities', JSON.stringify(state.userActivities))
+      }
+    },
+    saveNotifications(state) {
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem('notifications', JSON.stringify(state.notifications))
       }
     },
   },
@@ -62,6 +127,65 @@ export default new Vuex.Store({
     },
     async logout({ commit }) {
       commit('clearAuth')
+    },
+    toggleLike({ commit }, articleId) {
+      commit('toggleLike', articleId)
+    },
+    toggleFavorite({ commit }, articleId) {
+      commit('toggleFavorite', articleId)
+    },
+    addComment({ commit }, { articleId, content, parentCommentId = null, targetType, targetAuthor }) {
+      const comment = {
+        id: 'comment-' + Date.now(),
+        articleId,
+        content,
+        date: new Date().toISOString(),
+        author: this.getters.username || '匿名用户',
+        parentCommentId
+      }
+      commit('addComment', comment)
+      // 发送评论通知给目标作者（若非自己）
+      try {
+        let resolvedTargetType = targetType
+        let resolvedTargetAuthor = targetAuthor
+        if (!resolvedTargetType || !resolvedTargetAuthor) {
+          const articlesModule = require('@/data/articles').default
+          const article = (articlesModule || []).find(a => a.id === articleId)
+          if (article) {
+            resolvedTargetType = 'article'
+            resolvedTargetAuthor = article.author
+          }
+        }
+        const actor = this.getters.username || '匿名用户'
+        if (resolvedTargetAuthor && resolvedTargetAuthor !== actor) {
+          commit('addNotification', {
+            id: 'ntf-' + Date.now(),
+            type: 'comment',
+            targetType: resolvedTargetType || 'article',
+            actor,
+            articleId,
+            date: new Date().toISOString(),
+            excerpt: content.slice(0, 60)
+          })
+        }
+      } catch(e) { /* 忽略本地数据读取失败 */ }
+      return comment
+    },
+    toggleCommentLike({ commit, getters }, { commentId, articleId, commentAuthor, targetType = 'article' }) {
+      commit('toggleCommentLike', commentId)
+      const actor = getters.username || '匿名用户'
+      if (commentAuthor && commentAuthor !== actor) {
+        commit('addNotification', {
+          id: 'ntf-' + Date.now(),
+          type: 'like',
+          targetType: targetType === 'forum' ? 'forum-comment' : 'comment',
+          actor,
+          articleId,
+          commentId,
+          date: new Date().toISOString(),
+          excerpt: ''
+        })
+      }
     },
   },
   modules: {},
