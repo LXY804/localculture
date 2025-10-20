@@ -57,7 +57,6 @@
 </template>
 
 <script>
-import articles from '@/data/articles'
 import BaseModal from '@/components/Modal.vue'
 import ArticlePublishForm from '@/components/ArticlePublishForm.vue'
 import { mapGetters, mapActions } from 'vuex'
@@ -65,11 +64,12 @@ import { mapGetters, mapActions } from 'vuex'
 export default {
   name: 'ArticlesPage',
   data() {
-    return { list: articles, localQ: this.$route.query.q || '', sortBy: 'latest', showPublish: false }
+    return { localQ: this.$route.query.q || '', sortBy: 'latest', showPublish: false }
   },
   components: { BaseModal, ArticlePublishForm },
   computed: {
     ...mapGetters(['isLiked', 'isFavorited']),
+    list() { return this.$store.state.articles.list },
     filtered() {
       const q = (this.localQ || '').toLowerCase()
       if (!q) return this.list
@@ -90,6 +90,9 @@ export default {
   },
   watch: {
     '$route.query.q'(v) { this.localQ = v || '' }
+  },
+  created() {
+    this.$store.dispatch('articles/fetchArticles')
   },
   methods: {
     ...mapActions(['toggleLike', 'toggleFavorite']),

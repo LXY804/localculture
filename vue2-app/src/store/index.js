@@ -1,5 +1,13 @@
 import Vue from 'vue'
 import Vuex from 'vuex'
+import dashboard from './modules/dashboard'
+import announcements from './modules/announcements'
+import articles from './modules/articles'
+import users from './modules/users'
+import settings from './modules/settings'
+import user from './modules/user'
+import categories from './modules/categories'
+import tags from './modules/tags'
 
 Vue.use(Vuex)
 
@@ -47,6 +55,8 @@ export default new Vuex.Store({
     setAuth(state, { token, profile }) {
       state.authToken = token
       state.userProfile = profile
+      // 同步角色到 user 模块
+      this.commit('user/setRole', (profile && profile.role) || 'user')
       if (typeof localStorage !== 'undefined') {
         localStorage.setItem('authToken', token || '')
         localStorage.setItem('userProfile', profile ? JSON.stringify(profile) : '')
@@ -55,6 +65,7 @@ export default new Vuex.Store({
     clearAuth(state) {
       state.authToken = null
       state.userProfile = null
+      this.commit('user/setRole', 'user')
       state.userActivities = { likes: [], favorites: [], comments: [], commentLikes: [] }
       state.notifications = []
       if (typeof localStorage !== 'undefined') {
@@ -115,7 +126,7 @@ export default new Vuex.Store({
       const token = 'mock-token-' + Date.now()
       const profile = { id: 'u-' + Date.now(), username: phone, role: isAdmin ? 'admin' : 'user' }
       commit('setAuth', { token, profile })
-      return true
+      return { success: true, role: profile.role }
     },
     async registerWithPhone(context, { phone, password }) {
       void context; void phone; void password; // 标记参数已使用，避免未使用告警
@@ -146,29 +157,21 @@ export default new Vuex.Store({
       commit('addComment', comment)
       // 发送评论通知给目标作者（若非自己）
       try {
-        let resolvedTargetType = targetType
-        let resolvedTargetAuthor = targetAuthor
-        if (!resolvedTargetType || !resolvedTargetAuthor) {
-          const articlesModule = require('@/data/articles').default
-          const article = (articlesModule || []).find(a => a.id === articleId)
-          if (article) {
-            resolvedTargetType = 'article'
-            resolvedTargetAuthor = article.author
-          }
-        }
         const actor = this.getters.username || '匿名用户'
+        const resolvedTargetAuthor = targetAuthor
+        const resolvedTargetType = targetType || 'article'
         if (resolvedTargetAuthor && resolvedTargetAuthor !== actor) {
           commit('addNotification', {
             id: 'ntf-' + Date.now(),
             type: 'comment',
-            targetType: resolvedTargetType || 'article',
+            targetType: resolvedTargetType,
             actor,
             articleId,
             date: new Date().toISOString(),
             excerpt: content.slice(0, 60)
           })
         }
-      } catch(e) { /* 忽略本地数据读取失败 */ }
+      } catch(e) { /* 忽略 */ }
       return comment
     },
     toggleCommentLike({ commit, getters }, { commentId, articleId, commentAuthor, targetType = 'article' }) {
@@ -188,7 +191,16 @@ export default new Vuex.Store({
       }
     },
   },
-  modules: {},
+  modules: {
+    dashboard,
+    announcements,
+    articles,
+    users,
+    settings,
+    user,
+    categories,
+    tags
+  },
 })
 
 

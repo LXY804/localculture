@@ -1,0 +1,8 @@
+[
+  { "id": 1, "title": "传统文化保护的重要性", "summary": "维护民族特色与历史文明。", "content": "...", "status": "published", "author": "张三", "date": "2025-10-13T13:39:53", "publishTime": "2025-10-13 13:39:53", "category": "传统文化", "tags": ["保护","传承","历史"], "views": 1250, "likes": 45, "comments": 12, "cover": "/assets/craft.jpg" },
+  { "id": 2, "title": "木版年画的传承与创新", "summary": "传统技艺与现代融合。", "content": "...", "status": "published", "author": "李四", "date": "2025-10-13T13:49:53", "publishTime": "2025-10-13 13:49:53", "category": "民俗节庆", "tags": ["技艺","年画"], "views": 980, "likes": 32, "comments": 8, "cover": "/assets/festival.jpg" },
+  { "id": 3, "title": "民俗节庆与社区凝聚力", "summary": "节庆增强文化认同。", "content": "...", "status": "published", "author": "王五", "date": "2025-10-13T12:39:53", "publishTime": "2025-10-13 12:39:53", "category": "手工艺", "tags": ["民俗","节庆"], "views": 856, "likes": 28, "comments": 15, "cover": "/assets/craft.jpg" },
+  { "id": 4, "title": "古建筑保护与修复", "summary": "修复理念与方法。", "content": "...", "status": "draft", "author": "赵六", "date": "2025-10-12T12:39:53", "publishTime": null, "category": "古建筑", "tags": ["古建筑","修复"], "views": 0, "likes": 0, "comments": 0, "cover": "/assets/temple.jpg" }
+]
+
+

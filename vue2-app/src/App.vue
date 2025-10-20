@@ -1,60 +1,65 @@
 <template>
   <div id="app">
-    <nav class="nav">
-      <router-link class="brand" to="/">地方传统文化</router-link>
-      <div class="nav-group">
-        <router-link class="nav-btn" to="/">首页</router-link>
-        <router-link class="nav-btn" to="/articles">文章</router-link>
-        <router-link class="nav-btn" to="/forum">论坛</router-link>
-        <router-link class="nav-btn" to="/announcements">公告</router-link>
-      </div>
-      <form class="search" @submit.prevent="onSearch">
-        <div class="search-field">
-          <input v-model="searchKeyword" placeholder="搜索文章/帖子/公告" />
-          <button type="submit" class="search-btn">搜索</button>
+    <!-- 后台管理布局 -->
+    <AdminLayout v-if="isAdminRoute" />
+    <!-- 前台布局 -->
+    <div v-else>
+      <nav class="nav">
+        <router-link class="brand" to="/">地方传统文化</router-link>
+        <div class="nav-group">
+          <router-link class="nav-btn" to="/home">首页</router-link>
+          <router-link class="nav-btn" to="/articles">文章</router-link>
+          <router-link class="nav-btn" to="/forum">论坛</router-link>
+          <router-link class="nav-btn" to="/announcements">公告</router-link>
         </div>
-      </form>
-      
-      <!-- 后端管理按钮放在搜索栏后面 -->
-      <router-link v-if="role==='admin'" to="/admin" class="admin-link">后端管理</router-link>
-      <router-link v-if="isAuthed" to="/profile" class="profile-link">个人中心</router-link>
-      <span class="spacer" />
-      <template v-if="!isAuthed">
-        <span class="auth-group">
-          <button class="linklike" @click="openLogin = true">登录</button>
-          <button class="linklike" @click="openRegister = true">注册</button>
-        </span>
-      </template>
-      <template v-else>
-        <button class="linklike logout-btn" @click="logout">退出</button>
-      </template>
-    </nav>
-    <router-view />
-    <AuthLoginModal
-      v-if="openLogin"
-      @close="openLogin=false"
-      @go-register="(openLogin=false, openRegister=true)"
-      @go-forgot="(openLogin=false, openForgot=true)"
-    />
-    <AuthRegisterModal
-      v-if="openRegister"
-      @close="openRegister=false"
-      @go-login="(openRegister=false, openLogin=true)"
-      @after-register="openLogin=true"
-    />
-    <AuthForgotModal
-      v-if="openForgot"
-      @close="openForgot=false"
-      @go-login="(openForgot=false, openLogin=true)"
-    />
+        <form class="search" @submit.prevent="onSearch">
+          <div class="search-field">
+            <input v-model="searchKeyword" placeholder="搜索文章/帖子/公告" />
+            <button type="submit" class="search-btn">搜索</button>
+          </div>
+        </form>
+        
+        <!-- 后端管理按钮放在搜索栏后面 -->
+        <router-link v-if="role==='admin'" to="/admin" class="admin-link">后端管理</router-link>
+        <router-link v-if="isAuthed" to="/profile" class="profile-link">个人中心</router-link>
+        <span class="spacer" />
+        <template v-if="!isAuthed">
+          <span class="auth-group">
+            <button class="linklike" @click="openLogin = true">登录</button>
+            <button class="linklike" @click="openRegister = true">注册</button>
+          </span>
+        </template>
+        <template v-else>
+          <button class="linklike logout-btn" @click="logout">退出</button>
+        </template>
+      </nav>
+      <router-view />
+      <AuthLoginModal
+        v-if="openLogin"
+        @close="openLogin=false"
+        @go-register="(openLogin=false, openRegister=true)"
+        @go-forgot="(openLogin=false, openForgot=true)"
+      />
+      <AuthRegisterModal
+        v-if="openRegister"
+        @close="openRegister=false"
+        @go-login="(openRegister=false, openLogin=true)"
+        @after-register="openLogin=true"
+      />
+      <AuthForgotModal
+        v-if="openForgot"
+        @close="openForgot=false"
+        @go-login="(openForgot=false, openLogin=true)"
+      />
+    </div>
   </div>
-  
 </template>
 
 <script>
 export default {
   name: 'App',
   components: {
+    AdminLayout: () => import('./components/layout/AdminLayout.vue'),
     AuthLoginModal: () => import('./components/AuthLoginModal.vue'),
     AuthRegisterModal: () => import('./components/AuthRegisterModal.vue'),
     AuthForgotModal: () => import('./components/AuthForgotModal.vue'),
@@ -63,6 +68,9 @@ export default {
     isAuthed() { return this.$store.getters.isAuthenticated },
     role() { return this.$store.getters.currentRole },
     username() { return this.$store.getters.username },
+    isAdminRoute() {
+      return this.$route.path.startsWith('/admin')
+    }
   },
   data() {
     return {
@@ -75,7 +83,7 @@ export default {
   methods: {
     async logout() {
       await this.$store.dispatch('logout')
-      this.$router.replace('/')
+      this.$router.replace('/home')
     },
     onSearch() {
       this.$router.push({ name: 'articles', query: { q: this.searchKeyword } })

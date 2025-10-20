@@ -1,0 +1,1346 @@
+<template>
+  <div class="user-list">
+    <!-- 页面标题和操作区 -->
+    <div class="page-header">
+      <h2 class="page-title">用户管理</h2>
+      <el-button type="primary" @click="createUser" class="add-btn">
+        <i class="el-icon-plus"></i> 添加用户
+      </el-button>
+    </div>
+
+    <!-- 搜索和筛选区域 -->
+    <el-card class="filter-card" shadow="never">
+      <div slot="header" class="filter-header">
+        <span class="filter-title">筛选条件</span>
+        <el-button 
+          type="text" 
+          @click="filterCollapsed = !filterCollapsed"
+          class="collapse-btn"
+        >
+          <i :class="filterCollapsed ? 'el-icon-arrow-down' : 'el-icon-arrow-up'"></i>
+          {{ filterCollapsed ? '展开' : '收起' }}
+        </el-button>
+      </div>
+      
+      <el-collapse-transition>
+        <div v-show="!filterCollapsed" class="filter-content">
+          <el-form :inline="true" :model="searchForm" class="search-form">
+            <div class="filter-fields">
+              <el-form-item label="用户名">
+                <el-input
+                  v-model="searchForm.username"
+                  placeholder="请输入用户名"
+                  clearable
+                  @keyup.enter.native="handleSearch"
+                  class="search-input"
+                />
+              </el-form-item>
+              <el-form-item label="邮箱">
+                <el-input
+                  v-model="searchForm.email"
+                  placeholder="请输入邮箱"
+                  clearable
+                  @keyup.enter.native="handleSearch"
+                  class="search-input"
+                />
+              </el-form-item>
+              <el-form-item label="角色">
+                <el-select v-model="searchForm.role" placeholder="请选择角色" clearable class="search-select">
+                  <el-option
+                    v-for="role in roles"
+                    :key="role"
+                    :label="getRoleText(role)"
+                    :value="role"
+                  />
+                </el-select>
+              </el-form-item>
+              <el-form-item label="状态">
+                <el-select v-model="searchForm.status" placeholder="请选择状态" clearable class="search-select">
+                  <el-option label="正常" value="active" />
+                  <el-option label="禁用" value="inactive" />
+                </el-select>
+              </el-form-item>
+            </div>
+            <div class="search-actions">
+              <el-button type="primary" @click="handleSearch" class="search-btn">
+                <i class="el-icon-search"></i>
+                <span>搜索</span>
+              </el-button>
+            </div>
+          </el-form>
+        </div>
+      </el-collapse-transition>
+    </el-card>
+
+    <!-- 表格容器 -->
+    <el-card class="table-card" shadow="never">
+      <!-- 批量操作栏 -->
+      <div v-if="selectedItems.length > 0" class="batch-actions-bar">
+        <div class="batch-info">
+          <i class="el-icon-info"></i>
+          <span>已选择 <strong>{{ selectedItems.length }}</strong> 项</span>
+        </div>
+        <div class="batch-buttons">
+          <el-button type="warning" size="small" @click="batchDisable" class="batch-btn">
+            <i class="el-icon-remove-outline"></i> 批量禁用
+          </el-button>
+          <el-button type="success" size="small" @click="batchEnable" class="batch-btn">
+            <i class="el-icon-check"></i> 批量启用
+          </el-button>
+          <el-button type="danger" size="small" @click="batchDelete" class="batch-btn">
+            <i class="el-icon-delete"></i> 批量删除
+          </el-button>
+        </div>
+      </div>
+
+      <!-- 表格 -->
+      <el-table
+        v-loading="loading"
+        :data="filteredList"
+        @selection-change="handleSelectionChange"
+        class="user-table"
+        :row-class-name="tableRowClassName"
+        :header-cell-style="{ background: '#fafafa', color: '#606266', fontWeight: '500' }"
+      >
+        <el-table-column type="selection" width="55" />
+        <el-table-column prop="id" label="ID" width="60" align="center">
+          <template slot-scope="scope">
+            <span class="user-id">{{ scope.row.id }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column prop="avatar" label="头像" width="80" align="center">
+          <template slot-scope="scope">
+            <div class="avatar-container" @mouseenter="showUserCard(scope.row)" @mouseleave="hideUserCard">
+              <img 
+                v-if="scope.row.avatar && scope.row.avatar !== 'avatar'" 
+                :src="scope.row.avatar" 
+                alt="头像" 
+                class="avatar-image"
+                @error="handleAvatarError"
+              />
+              <i v-else class="el-icon-user avatar-placeholder"></i>
+            </div>
+          </template>
+        </el-table-column>
+        <el-table-column prop="username" label="用户名" width="120" show-overflow-tooltip>
+          <template slot-scope="scope">
+            <span class="username-text" :title="scope.row.username">{{ scope.row.username }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column prop="email" label="邮箱" min-width="180" show-overflow-tooltip />
+        <el-table-column prop="phone" label="手机号" width="120" show-overflow-tooltip />
+        <el-table-column prop="role" label="角色" width="100" align="center">
+          <template slot-scope="scope">
+            <el-tag 
+              :class="['role-tag', `role-${scope.row.role}`]" 
+              size="small"
+              effect="light"
+            >
+              {{ getRoleText(scope.row.role) }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="status" label="状态" width="100" align="center">
+          <template slot-scope="scope">
+            <el-tag 
+              :class="['status-tag', `status-${scope.row.status}`]" 
+              size="small"
+              effect="light"
+              @click.native="toggleUserStatus(scope.row)"
+            >
+              <i :class="scope.row.status === 'active' ? 'el-icon-check' : 'el-icon-close'"></i>
+              {{ getStatusText(scope.row.status) }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="createTime" label="注册时间" width="160" show-overflow-tooltip />
+        <el-table-column prop="lastLoginTime" label="最后登录" width="160" show-overflow-tooltip>
+          <template slot-scope="scope">
+            {{ scope.row.lastLoginTime || '-' }}
+          </template>
+        </el-table-column>
+        <el-table-column prop="loginCount" label="登录次数" width="100" align="center" />
+        <el-table-column label="操作" width="200" fixed="right" align="center">
+          <template slot-scope="scope">
+            <div class="action-buttons">
+              <el-button size="mini" type="primary" @click="editUser(scope.row)" class="action-btn edit-btn">
+                <i class="el-icon-edit"></i>
+              </el-button>
+              <el-dropdown @command="(command) => handleDropdownCommand(command, scope.row)" trigger="click">
+                <el-button size="mini" class="action-btn more-btn">
+                  <i class="el-icon-more"></i>
+                </el-button>
+                <el-dropdown-menu slot="dropdown">
+                  <el-dropdown-item command="view">
+                    <i class="el-icon-view"></i> 查看
+                  </el-dropdown-item>
+                  <el-dropdown-item 
+                    :command="scope.row.status === 'active' ? 'disable' : 'enable'"
+                    :class="scope.row.status === 'active' ? 'danger-item' : 'success-item'"
+                  >
+                    <i :class="scope.row.status === 'active' ? 'el-icon-remove-outline' : 'el-icon-check'"></i>
+                    {{ scope.row.status === 'active' ? '禁用' : '启用' }}
+                  </el-dropdown-item>
+                  <el-dropdown-item command="delete" class="danger-item">
+                    <i class="el-icon-delete"></i> 删除
+                  </el-dropdown-item>
+                </el-dropdown-menu>
+              </el-dropdown>
+            </div>
+          </template>
+        </el-table-column>
+      </el-table>
+
+      <!-- 分页信息 -->
+      <div class="pagination-info">
+        <span class="total-info">共 <strong>{{ pagination.total }}</strong> 条用户记录</span>
+      </div>
+    </el-card>
+
+    <!-- 分页 -->
+    <div class="pagination">
+      <el-pagination
+        @size-change="handleSizeChange"
+        @current-change="handleCurrentChange"
+        :current-page="pagination.current"
+        :page-sizes="[10, 20, 50, 100]"
+        :page-size="pagination.pageSize"
+        :total="pagination.total"
+        layout="total, sizes, prev, pager, next, jumper"
+        class="pagination-component"
+      />
+    </div>
+
+    <!-- 用户卡片悬浮提示 -->
+    <div v-if="showUserCardTooltip" class="user-card-tooltip" :style="tooltipStyle">
+      <div class="user-card-content">
+        <img :src="hoveredUser.avatar" alt="头像" class="tooltip-avatar" v-if="hoveredUser.avatar && hoveredUser.avatar !== 'avatar'" />
+        <i v-else class="el-icon-user tooltip-avatar-placeholder"></i>
+        <div class="tooltip-info">
+          <div class="tooltip-username">{{ hoveredUser.username }}</div>
+          <div class="tooltip-email">{{ hoveredUser.email }}</div>
+          <div class="tooltip-role">
+            <el-tag :class="['tooltip-role-tag', `role-${hoveredUser.role}`]" size="mini">
+              {{ getRoleText(hoveredUser.role) }}
+            </el-tag>
+            <el-tag :class="['tooltip-status-tag', `status-${hoveredUser.status}`]" size="mini">
+              {{ getStatusText(hoveredUser.status) }}
+            </el-tag>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 创建/编辑用户对话框 -->
+    <el-dialog
+      :title="dialogTitle"
+      :visible.sync="dialogVisible"
+      width="600px"
+      @close="handleDialogClose"
+    >
+      <el-form :model="userForm" :rules="rules" ref="userForm" label-width="80px">
+        <el-row :gutter="20">
+          <el-col :span="12">
+            <el-form-item label="用户名" prop="username">
+              <el-input v-model="userForm.username" placeholder="请输入用户名" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="邮箱" prop="email">
+              <el-input v-model="userForm.email" placeholder="请输入邮箱" />
+            </el-form-item>
+          </el-col>
+        </el-row>
+        
+        <el-row :gutter="20">
+          <el-col :span="12">
+            <el-form-item label="手机号" prop="phone">
+              <el-input v-model="userForm.phone" placeholder="请输入手机号" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="角色" prop="role">
+              <el-select v-model="userForm.role" placeholder="请选择角色">
+                <el-option
+                  v-for="role in roles"
+                  :key="role"
+                  :label="getRoleText(role)"
+                  :value="role"
+                />
+              </el-select>
+            </el-form-item>
+          </el-col>
+        </el-row>
+
+        <el-form-item label="真实姓名" prop="realName">
+          <el-input v-model="userForm.profile.realName" placeholder="请输入真实姓名" />
+        </el-form-item>
+
+        <el-row :gutter="20">
+          <el-col :span="12">
+            <el-form-item label="性别" prop="gender">
+              <el-radio-group v-model="userForm.profile.gender">
+                <el-radio label="male">男</el-radio>
+                <el-radio label="female">女</el-radio>
+              </el-radio-group>
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="生日" prop="birthday">
+              <el-date-picker
+                v-model="userForm.profile.birthday"
+                type="date"
+                placeholder="选择生日"
+                format="yyyy-MM-dd"
+                value-format="yyyy-MM-dd"
+              />
+            </el-form-item>
+          </el-col>
+        </el-row>
+
+        <el-form-item label="地址" prop="address">
+          <el-input v-model="userForm.profile.address" placeholder="请输入地址" />
+        </el-form-item>
+
+        <el-form-item label="个人简介" prop="bio">
+          <el-input
+            v-model="userForm.profile.bio"
+            type="textarea"
+            :rows="3"
+            placeholder="请输入个人简介"
+          />
+        </el-form-item>
+
+        <el-form-item v-if="!isEdit" label="密码" prop="password">
+          <el-input
+            v-model="userForm.password"
+            type="password"
+            placeholder="请输入密码"
+            show-password
+          />
+        </el-form-item>
+      </el-form>
+      <div slot="footer" class="dialog-footer">
+        <el-button @click="dialogVisible = false">取消</el-button>
+        <el-button type="primary" @click="submitForm">确定</el-button>
+      </div>
+    </el-dialog>
+
+    <!-- 查看用户对话框 -->
+    <el-dialog
+      title="用户详情"
+      :visible.sync="viewDialogVisible"
+      width="800px"
+    >
+      <div v-if="currentUser" class="user-detail">
+        <div class="user-header">
+          <img :src="currentUser.avatar" alt="头像" class="user-avatar" />
+          <div class="user-info">
+            <h3>{{ currentUser.username }}</h3>
+            <p>{{ currentUser.profile.realName }}</p>
+            <el-tag :type="getRoleType(currentUser.role)" size="medium">
+              {{ getRoleText(currentUser.role) }}
+            </el-tag>
+          </div>
+        </div>
+        
+        <el-tabs v-model="activeTab">
+          <el-tab-pane label="基本信息" name="basic">
+            <el-descriptions :column="2" border>
+              <el-descriptions-item label="用户名">{{ currentUser.username }}</el-descriptions-item>
+              <el-descriptions-item label="邮箱">{{ currentUser.email }}</el-descriptions-item>
+              <el-descriptions-item label="手机号">{{ currentUser.phone }}</el-descriptions-item>
+              <el-descriptions-item label="角色">{{ getRoleText(currentUser.role) }}</el-descriptions-item>
+              <el-descriptions-item label="状态">{{ getStatusText(currentUser.status) }}</el-descriptions-item>
+              <el-descriptions-item label="注册时间">{{ currentUser.createTime }}</el-descriptions-item>
+              <el-descriptions-item label="最后登录">{{ currentUser.lastLoginTime || '-' }}</el-descriptions-item>
+              <el-descriptions-item label="登录次数">{{ currentUser.loginCount }}</el-descriptions-item>
+              <el-descriptions-item label="性别">{{ currentUser.profile.gender === 'male' ? '男' : '女' }}</el-descriptions-item>
+              <el-descriptions-item label="生日">{{ currentUser.profile.birthday }}</el-descriptions-item>
+              <el-descriptions-item label="地址" :span="2">{{ currentUser.profile.address }}</el-descriptions-item>
+              <el-descriptions-item label="个人简介" :span="2">{{ currentUser.profile.bio }}</el-descriptions-item>
+            </el-descriptions>
+          </el-tab-pane>
+          
+          <el-tab-pane label="活动日志" name="activity">
+            <el-timeline>
+              <el-timeline-item
+                v-for="log in currentUser.activityLog"
+                :key="log.id"
+                :timestamp="log.time"
+              >
+                <p>{{ log.action }}</p>
+                <p v-if="log.ip" class="log-ip">IP: {{ log.ip }}</p>
+              </el-timeline-item>
+            </el-timeline>
+          </el-tab-pane>
+        </el-tabs>
+      </div>
+    </el-dialog>
+  </div>
+</template>
+
+<script>
+export default {
+  name: 'UserList',
+  data() {
+    return {
+      loading: false,
+      filterCollapsed: false,
+      searchForm: {
+        username: '',
+        email: '',
+        role: '',
+        status: ''
+      },
+      selectedItems: [],
+      dialogVisible: false,
+      viewDialogVisible: false,
+      isEdit: false,
+      currentUser: null,
+      activeTab: 'basic',
+      showUserCardTooltip: false,
+      hoveredUser: {},
+      tooltipStyle: {},
+      userForm: {
+        username: '',
+        email: '',
+        phone: '',
+        role: 'user',
+        password: '',
+        profile: {
+          realName: '',
+          gender: 'male',
+          birthday: '',
+          address: '',
+          bio: ''
+        }
+      },
+      rules: {
+        username: [
+          { required: true, message: '请输入用户名', trigger: 'blur' },
+          { min: 3, max: 20, message: '用户名长度在 3 到 20 个字符', trigger: 'blur' }
+        ],
+        email: [
+          { required: true, message: '请输入邮箱', trigger: 'blur' },
+          { type: 'email', message: '请输入正确的邮箱格式', trigger: 'blur' }
+        ],
+        phone: [
+          { required: true, message: '请输入手机号', trigger: 'blur' },
+          { pattern: /^1[3-9]\d{9}$/, message: '请输入正确的手机号', trigger: 'blur' }
+        ],
+        role: [
+          { required: true, message: '请选择角色', trigger: 'change' }
+        ],
+        password: [
+          { required: true, message: '请输入密码', trigger: 'blur' },
+          { min: 6, max: 20, message: '密码长度在 6 到 20 个字符', trigger: 'blur' }
+        ]
+      }
+    }
+  },
+  computed: {
+    list() {
+      return this.$store.getters['users/list']
+    },
+    roles() {
+      return this.$store.getters['users/roles']
+    },
+    pagination() {
+      return this.$store.getters['users/pagination']
+    },
+    filteredList() {
+      let filtered = this.list
+      
+      if (this.searchForm.username) {
+        filtered = filtered.filter(item => 
+          item.username.toLowerCase().includes(this.searchForm.username.toLowerCase())
+        )
+      }
+      
+      if (this.searchForm.email) {
+        filtered = filtered.filter(item => 
+          item.email.toLowerCase().includes(this.searchForm.email.toLowerCase())
+        )
+      }
+      
+      if (this.searchForm.role) {
+        filtered = filtered.filter(item => item.role === this.searchForm.role)
+      }
+      
+      if (this.searchForm.status) {
+        filtered = filtered.filter(item => item.status === this.searchForm.status)
+      }
+      
+      return filtered
+    },
+    dialogTitle() {
+      return this.isEdit ? '编辑用户' : '添加用户'
+    }
+  },
+  mounted() {
+    this.fetchData()
+  },
+  methods: {
+    async fetchData() {
+      this.loading = true
+      await this.$store.dispatch('users/fetchUsers')
+      this.loading = false
+    },
+    handleSearch() {
+      // 搜索逻辑在computed中实现
+    },
+    handleReset() {
+      this.searchForm = {
+        username: '',
+        email: '',
+        role: '',
+        status: ''
+      }
+    },
+    handleSelectionChange(selection) {
+      this.selectedItems = selection
+    },
+    handleSizeChange(val) {
+      this.$store.dispatch('users/fetchUsers', {
+        pageSize: val,
+        current: 1
+      })
+    },
+    handleCurrentChange(val) {
+      this.$store.dispatch('users/fetchUsers', {
+        current: val
+      })
+    },
+    createUser() {
+      this.isEdit = false
+      this.userForm = {
+        username: '',
+        email: '',
+        phone: '',
+        role: 'user',
+        password: '',
+        profile: {
+          realName: '',
+          gender: 'male',
+          birthday: '',
+          address: '',
+          bio: ''
+        }
+      }
+      this.dialogVisible = true
+    },
+    editUser(row) {
+      this.isEdit = true
+      this.userForm = {
+        ...row,
+        profile: { ...row.profile }
+      }
+      this.dialogVisible = true
+    },
+    async viewUser(row) {
+      await this.$store.dispatch('users/fetchUserDetail', row.id)
+      this.currentUser = this.$store.getters['users/detail']
+      this.viewDialogVisible = true
+    },
+    async toggleUserStatus(row) {
+      const newStatus = row.status === 'active' ? 'inactive' : 'active'
+      const action = newStatus === 'active' ? '启用' : '禁用'
+      
+      try {
+        await this.$confirm(`确定要${action}用户"${row.username}"吗？`, '提示', {
+          confirmButtonText: '确定',
+          cancelButtonText: '取消',
+          type: 'warning'
+        })
+        
+        await this.$store.dispatch('users/updateUserStatus', {
+          id: row.id,
+          status: newStatus
+        })
+        
+        this.$message.success(`${action}成功`)
+        this.fetchData()
+      } catch (error) {
+        // 用户取消操作
+      }
+    },
+    async deleteUser(row) {
+      try {
+        await this.$confirm('确定要删除这个用户吗？', '提示', {
+          confirmButtonText: '确定',
+          cancelButtonText: '取消',
+          type: 'warning'
+        })
+        await this.$store.dispatch('users/deleteUser', row.id)
+        this.$message.success('删除成功')
+        this.fetchData()
+      } catch (error) {
+        // 用户取消删除
+      }
+    },
+    async batchDisable() {
+      if (this.selectedItems.length === 0) {
+        this.$message.warning('请选择要禁用的用户')
+        return
+      }
+      
+      try {
+        await this.$confirm(`确定要禁用选中的 ${this.selectedItems.length} 个用户吗？`, '提示', {
+          confirmButtonText: '确定',
+          cancelButtonText: '取消',
+          type: 'warning'
+        })
+        
+        for (const item of this.selectedItems) {
+          await this.$store.dispatch('users/updateUserStatus', {
+            id: item.id,
+            status: 'inactive'
+          })
+        }
+        
+        this.$message.success('批量禁用成功')
+        this.fetchData()
+      } catch (error) {
+        // 用户取消操作
+      }
+    },
+    async batchEnable() {
+      if (this.selectedItems.length === 0) {
+        this.$message.warning('请选择要启用的用户')
+        return
+      }
+      
+      try {
+        await this.$confirm(`确定要启用选中的 ${this.selectedItems.length} 个用户吗？`, '提示', {
+          confirmButtonText: '确定',
+          cancelButtonText: '取消',
+          type: 'warning'
+        })
+        
+        for (const item of this.selectedItems) {
+          await this.$store.dispatch('users/updateUserStatus', {
+            id: item.id,
+            status: 'active'
+          })
+        }
+        
+        this.$message.success('批量启用成功')
+        this.fetchData()
+      } catch (error) {
+        // 用户取消操作
+      }
+    },
+    async batchDelete() {
+      if (this.selectedItems.length === 0) {
+        this.$message.warning('请选择要删除的用户')
+        return
+      }
+      
+      try {
+        await this.$confirm(`确定要删除选中的 ${this.selectedItems.length} 个用户吗？`, '提示', {
+          confirmButtonText: '确定',
+          cancelButtonText: '取消',
+          type: 'warning'
+        })
+        
+        for (const item of this.selectedItems) {
+          await this.$store.dispatch('users/deleteUser', item.id)
+        }
+        
+        this.$message.success('批量删除成功')
+        this.fetchData()
+      } catch (error) {
+        // 用户取消删除
+      }
+    },
+    submitForm() {
+      this.$refs.userForm.validate(async (valid) => {
+        if (valid) {
+          try {
+            if (this.isEdit) {
+              await this.$store.dispatch('users/updateUser', this.userForm)
+              this.$message.success('更新成功')
+            } else {
+              await this.$store.dispatch('users/createUser', this.userForm)
+              this.$message.success('创建成功')
+            }
+            this.dialogVisible = false
+            this.fetchData()
+          } catch (error) {
+            this.$message.error('操作失败')
+          }
+        }
+      })
+    },
+    handleDialogClose() {
+      this.$refs.userForm.resetFields()
+    },
+    getRoleType(role) {
+      const typeMap = {
+        'admin': 'danger',
+        'editor': 'warning',
+        'user': 'success'
+      }
+      return typeMap[role] || 'info'
+    },
+    getRoleText(role) {
+      const textMap = {
+        'admin': '管理员',
+        'editor': '编辑',
+        'user': '用户'
+      }
+      return textMap[role] || role
+    },
+    getStatusType(status) {
+      const typeMap = {
+        'active': 'success',
+        'inactive': 'danger'
+      }
+      return typeMap[status] || 'info'
+    },
+    getStatusText(status) {
+      const textMap = {
+        'active': '正常',
+        'inactive': '禁用'
+      }
+      return textMap[status] || status
+    },
+    // 新增方法
+    tableRowClassName({ rowIndex }) {
+      return rowIndex % 2 === 1 ? 'even-row' : 'odd-row'
+    },
+    handleAvatarError(event) {
+      event.target.style.display = 'none'
+      event.target.nextElementSibling.style.display = 'inline-block'
+    },
+    showUserCard(user) {
+      this.hoveredUser = user
+      this.showUserCardTooltip = true
+      // 简单的定位逻辑，实际项目中可以使用更精确的定位
+      this.tooltipStyle = {
+        position: 'fixed',
+        top: '100px',
+        right: '20px',
+        zIndex: 9999
+      }
+    },
+    hideUserCard() {
+      this.showUserCardTooltip = false
+      this.hoveredUser = {}
+    },
+    handleDropdownCommand(command, row) {
+      switch (command) {
+        case 'view':
+          this.viewUser(row)
+          break
+        case 'enable':
+          this.toggleUserStatus(row)
+          break
+        case 'disable':
+          this.toggleUserStatus(row)
+          break
+        case 'delete':
+          this.deleteUser(row)
+          break
+      }
+    }
+  }
+}
+</script>
+
+<style scoped>
+/* 页面整体布局 */
+.user-list {
+  padding: 24px;
+  background: #f5f7fa;
+  min-height: 100vh;
+}
+
+/* 页面标题区域 */
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+  padding: 0 4px;
+}
+
+.page-title {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 600;
+  color: #303133;
+}
+
+.add-btn {
+  border-radius: 8px;
+  padding: 12px 24px;
+  font-weight: 500;
+  box-shadow: 0 2px 8px rgba(64, 158, 255, 0.2);
+  transition: all 0.3s ease;
+}
+
+.add-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(64, 158, 255, 0.3);
+}
+
+/* 筛选区域 */
+.filter-card {
+  margin-bottom: 24px;
+  border-radius: 12px;
+  border: 1px solid #e4e7ed;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.filter-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 4px;
+}
+
+.filter-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #303133;
+}
+
+.collapse-btn {
+  color: #909399;
+  font-size: 14px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  transition: all 0.3s ease;
+}
+
+.collapse-btn:hover {
+  background: #f5f7fa;
+  color: #409eff;
+}
+
+.filter-content {
+  padding: 8px 0;
+}
+
+.search-form {
+  margin: 0;
+  position: relative;
+  padding-bottom: 50px; /* 为底部按钮留出空间 */
+}
+
+.filter-fields {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.search-form .el-form-item {
+  margin-right: 0;
+  margin-bottom: 0;
+}
+
+.search-input,
+.search-select {
+  width: 200px;
+  border-radius: 8px;
+}
+
+.search-actions {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  margin: 0;
+}
+
+.button-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: nowrap;
+}
+
+.search-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  padding: 10px 20px;
+  font-weight: 500;
+  box-shadow: 0 2px 6px rgba(64, 158, 255, 0.2);
+  transition: all 0.3s ease;
+  white-space: nowrap;
+  flex-shrink: 0;
+  min-width: 80px;
+  gap: 6px;
+}
+
+.search-btn i {
+  line-height: 1;
+  vertical-align: middle;
+}
+
+.search-btn span {
+  line-height: 1;
+  vertical-align: middle;
+}
+
+.search-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(64, 158, 255, 0.3);
+}
+
+/* 重置按钮已移除 */
+
+/* 表格容器 */
+.table-card {
+  border-radius: 12px;
+  border: 1px solid #e4e7ed;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  overflow: hidden;
+}
+
+/* 批量操作栏 */
+.batch-actions-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  background: linear-gradient(135deg, #f0f9ff 0%, #e6f7ff 100%);
+  border-bottom: 1px solid #b3d8ff;
+  margin: 0;
+}
+
+.batch-info {
+  display: flex;
+  align-items: center;
+  color: #1890ff;
+  font-size: 14px;
+}
+
+.batch-info i {
+  margin-right: 8px;
+  font-size: 16px;
+}
+
+.batch-buttons {
+  display: flex;
+  gap: 12px;
+}
+
+.batch-btn {
+  border-radius: 8px;
+  padding: 8px 16px;
+  font-weight: 500;
+  transition: all 0.3s ease;
+}
+
+.batch-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+/* 表格样式 */
+.user-table {
+  font-size: 14px;
+}
+
+.user-table .el-table__row {
+  height: 50px;
+  transition: all 0.3s ease;
+}
+
+.user-table .el-table__row:hover {
+  background: #f8f9fa !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.user-table .even-row {
+  background: #fafafa;
+}
+
+.user-table .odd-row {
+  background: #ffffff;
+}
+
+/* 用户ID样式 */
+.user-id {
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 12px;
+  color: #909399;
+  font-weight: 500;
+}
+
+/* 头像样式 */
+.avatar-container {
+  position: relative;
+  display: inline-block;
+  cursor: pointer;
+}
+
+.avatar-image {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid #f0f0f0;
+  transition: all 0.3s ease;
+}
+
+.avatar-image:hover {
+  border-color: #409eff;
+  transform: scale(1.05);
+}
+
+.avatar-placeholder {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: #f5f7fa;
+  color: #c0c4cc;
+  font-size: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid #e4e7ed;
+}
+
+/* 用户名样式 */
+.username-text {
+  font-weight: 600;
+  color: #303133;
+  cursor: pointer;
+  transition: color 0.3s ease;
+}
+
+.username-text:hover {
+  color: #409eff;
+}
+
+/* 角色标签样式 */
+.role-tag {
+  border-radius: 12px;
+  font-weight: 500;
+  padding: 4px 12px;
+  border: none;
+}
+
+.role-admin {
+  background: #fef2f2;
+  color: #dc2626;
+}
+
+.role-editor {
+  background: #fffbeb;
+  color: #d97706;
+}
+
+.role-user {
+  background: #f0fdf4;
+  color: #16a34a;
+}
+
+/* 状态标签样式 */
+.status-tag {
+  border-radius: 12px;
+  font-weight: 500;
+  padding: 4px 12px;
+  border: none;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.status-tag:hover {
+  transform: scale(1.05);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.status-active {
+  background: #f0fdf4;
+  color: #16a34a;
+}
+
+.status-inactive {
+  background: #f5f5f5;
+  color: #6b7280;
+}
+
+/* 操作按钮样式 */
+.action-buttons {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.action-btn {
+  border-radius: 8px;
+  padding: 6px 12px;
+  font-weight: 500;
+  transition: all 0.3s ease;
+  border: none;
+  min-width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.edit-btn {
+  background: #409eff;
+  color: white;
+}
+
+.edit-btn:hover {
+  background: #337ecc;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(64, 158, 255, 0.3);
+}
+
+.more-btn {
+  background: #f5f7fa;
+  color: #606266;
+  border: 1px solid #dcdfe6;
+}
+
+.more-btn:hover {
+  background: #ecf5ff;
+  color: #409eff;
+  border-color: #b3d8ff;
+  transform: translateY(-1px);
+}
+
+/* 下拉菜单样式 */
+.danger-item {
+  color: #f56c6c !important;
+}
+
+.success-item {
+  color: #67c23a !important;
+}
+
+/* 分页信息 */
+.pagination-info {
+  padding: 16px 20px;
+  background: #fafafa;
+  border-top: 1px solid #e4e7ed;
+  text-align: left;
+}
+
+.total-info {
+  color: #606266;
+  font-size: 14px;
+}
+
+.total-info strong {
+  color: #303133;
+  font-weight: 600;
+}
+
+/* 分页组件 */
+.pagination {
+  margin-top: 24px;
+  text-align: right;
+  padding: 0 4px;
+}
+
+.pagination-component {
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+/* 用户卡片悬浮提示 */
+.user-card-tooltip {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+  border: 1px solid #e4e7ed;
+  padding: 16px;
+  min-width: 200px;
+  animation: fadeInUp 0.3s ease;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.user-card-content {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.tooltip-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid #f0f0f0;
+}
+
+.tooltip-avatar-placeholder {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: #f5f7fa;
+  color: #c0c4cc;
+  font-size: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid #e4e7ed;
+}
+
+.tooltip-info {
+  flex: 1;
+}
+
+.tooltip-username {
+  font-size: 16px;
+  font-weight: 600;
+  color: #303133;
+  margin-bottom: 4px;
+}
+
+.tooltip-email {
+  font-size: 12px;
+  color: #909399;
+  margin-bottom: 8px;
+}
+
+.tooltip-role {
+  display: flex;
+  gap: 6px;
+}
+
+.tooltip-role-tag,
+.tooltip-status-tag {
+  border-radius: 8px;
+  font-size: 10px;
+  padding: 2px 6px;
+  border: none;
+}
+
+/* 用户详情对话框样式 */
+.user-detail .user-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 24px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid #ebeef5;
+}
+
+.user-avatar {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  object-fit: cover;
+  margin-right: 20px;
+  border: 3px solid #f0f0f0;
+}
+
+.user-info h3 {
+  margin: 0 0 8px 0;
+  color: #303133;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.user-info p {
+  margin: 0 0 12px 0;
+  color: #606266;
+  font-size: 14px;
+}
+
+.log-ip {
+  color: #909399;
+  font-size: 12px;
+  margin: 5px 0 0 0;
+}
+
+/* 响应式设计 */
+@media (max-width: 1200px) {
+  .search-form .el-form-item {
+    margin-right: 16px;
+  }
+  
+  .search-input,
+  .search-select {
+    width: 180px;
+  }
+}
+
+@media (max-width: 768px) {
+  .user-list {
+    padding: 16px;
+  }
+  
+  .page-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 16px;
+  }
+  
+  .filter-fields {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+  
+  .search-form .el-form-item {
+    margin-right: 0;
+    margin-bottom: 0;
+  }
+  
+  .search-input,
+  .search-select {
+    width: 100%;
+  }
+  
+  .search-actions {
+    position: static;
+    margin-top: 16px;
+    text-align: left;
+  }
+  
+  .button-group {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+  
+  .batch-actions-bar {
+    flex-direction: column;
+    gap: 12px;
+    align-items: flex-start;
+  }
+  
+  .batch-buttons {
+    width: 100%;
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 480px) {
+  .button-group {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+  
+  .search-btn,
+  .reset-btn {
+    width: 100%;
+    min-width: auto;
+  }
+}
+</style>
