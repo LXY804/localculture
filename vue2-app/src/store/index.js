@@ -6,6 +6,8 @@ import articles from './modules/articles'
 import users from './modules/users'
 import settings from './modules/settings'
 import user from './modules/user'
+import categories from './modules/categories'
+import tags from './modules/tags'
 
 Vue.use(Vuex)
 
@@ -195,7 +197,9 @@ export default new Vuex.Store({
     articles,
     users,
     settings,
-    user
+    user,
+    categories,
+    tags
   },
 })
 

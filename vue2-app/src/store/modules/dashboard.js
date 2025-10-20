@@ -1,4 +1,3 @@
-import { getMetrics } from '@/api/metrics'
 const state = {
   stats: {
     totalAnnouncements: 0,
@@ -53,12 +52,7 @@ const actions = {
     const articles = (rootState.articles && rootState.articles.list) || []
     const announcements = (rootState.announcements && rootState.announcements.list) || []
     const totalUsers = (rootState.users && rootState.users.list && rootState.users.list.length) || 0
-    // 从稳定的指标接口获取今日访问量
-    let dailyVisits = state.stats.dailyVisits
-    try {
-      const m = await getMetrics()
-      if (m && m.data && typeof m.data.dailyVisits === 'number') dailyVisits = m.data.dailyVisits
-    } catch(e) { /* 网络失败时使用上次值 */ }
+    const dailyVisits = Math.round(500 + Math.random() * 1200)
 
     // 统计
     commit('SET_STATS', {

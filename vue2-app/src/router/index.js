@@ -18,6 +18,9 @@ import ForgotPassword from '@/views/ForgotPassword.vue'
 import AdminDashboard from '@/views/admin/dashboard/Dashboard.vue'
 import AnnouncementList from '@/views/admin/announcements/AnnouncementList.vue'
 import ArticleList from '@/views/admin/articles/ArticleList.vue'
+import CategoryManagement from '@/views/admin/categories/CategoryManagement.vue'
+import TagManagement from '@/views/admin/tags/TagManagement.vue'
+import ContentOverview from '@/views/admin/content/ContentOverview.vue'
 import UserList from '@/views/admin/users/UserList.vue'
 import SystemConfig from '@/views/admin/settings/SystemConfig.vue'
 import PersonalSettings from '@/views/admin/settings/PersonalSettings.vue'
@@ -48,16 +51,19 @@ const router = new Router({
       name: 'admin',
       component: Admin,
       meta: { requiresAuth: true, roles: ['admin'] },
-      children: [
-        { path: '', redirect: '/admin/dashboard' },
-        { path: 'dashboard', name: 'admin-dashboard', component: AdminDashboard },
-        { path: 'announcements', name: 'admin-announcements', component: AnnouncementList },
-        { path: 'articles', name: 'admin-articles', component: ArticleList },
-        { path: 'users', name: 'admin-users', component: UserList },
-        { path: 'settings/system', name: 'admin-settings-system', component: SystemConfig },
-        { path: 'settings/profile', name: 'admin-settings-profile', component: PersonalSettings },
-        // 其他管理页面路由将在后续添加
-      ]
+            children: [
+              { path: '', redirect: '/admin/dashboard' },
+              { path: 'dashboard', name: 'admin-dashboard', component: AdminDashboard },
+              { path: 'content', name: 'admin-content', component: ContentOverview },
+              { path: 'articles', name: 'admin-articles', component: ArticleList },
+              { path: 'announcements', name: 'admin-announcements', component: AnnouncementList },
+              { path: 'categories', name: 'admin-categories', component: CategoryManagement },
+              { path: 'tags', name: 'admin-tags', component: TagManagement },
+              { path: 'users', name: 'admin-users', component: UserList },
+              { path: 'settings/system', name: 'admin-settings-system', component: SystemConfig },
+              { path: 'settings/profile', name: 'admin-settings-profile', component: PersonalSettings },
+              // 其他管理页面路由将在后续添加
+            ]
     },
   ],
 })
