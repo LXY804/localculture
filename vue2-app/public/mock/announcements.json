@@ -1,0 +1,8 @@
+[
+  { "id": 1, "title": "系统维护通知", "content": "今晚22:00-24:00维护升级。", "status": "published", "visible": true, "category": "维护通知", "author": "管理员", "publishTime": "2025-10-13 10:00:00", "views": 156, "priority": "high" },
+  { "id": 2, "title": "春节活动通知", "content": "传统文化知识竞赛。", "status": "published", "visible": true, "category": "活动通知", "author": "管理员", "publishTime": "2025-10-12 12:00:00", "views": 234, "priority": "normal" },
+  { "id": 3, "title": "用户协议更新", "content": "请阅读新的条款。", "status": "published", "visible": true, "category": "系统公告", "author": "管理员", "publishTime": "2025-10-11 09:30:00", "views": 89, "priority": "normal" },
+  { "id": 4, "title": "新功能上线", "content": "新增收藏功能。", "status": "draft", "visible": false, "category": "系统公告", "author": "管理员", "publishTime": null, "views": 0, "priority": "normal" }
+]
+
+

@@ -1,3 +1,4 @@
+import { getMetrics } from '@/api/metrics'
 const state = {
   stats: {
     totalAnnouncements: 0,
@@ -40,97 +41,85 @@ const mutations = {
 }
 
 const actions = {
-  async fetchDashboardData({ commit }) {
-    // 模拟API调用
-    const mockData = {
-      stats: {
-        totalAnnouncements: 15,
-        totalArticles: 128,
-        totalUsers: 256,
-        dailyVisits: 1240
-      },
-      charts: {
-        announcementTrends: [
-          { date: '2024-01-01', count: 2 },
-          { date: '2024-01-02', count: 3 },
-          { date: '2024-01-03', count: 1 },
-          { date: '2024-01-04', count: 4 },
-          { date: '2024-01-05', count: 2 },
-          { date: '2024-01-06', count: 3 },
-          { date: '2024-01-07', count: 1 }
-        ],
-        userGrowth: [
-          { date: '2024-01-01', count: 10 },
-          { date: '2024-01-02', count: 15 },
-          { date: '2024-01-03', count: 12 },
-          { date: '2024-01-04', count: 18 },
-          { date: '2024-01-05', count: 22 },
-          { date: '2024-01-06', count: 25 },
-          { date: '2024-01-07', count: 28 }
-        ],
-        readingRankings: [
-          { title: '传统文化保护的重要性', views: 1250 },
-          { title: '地方民俗节庆活动', views: 980 },
-          { title: '传统手工艺传承', views: 856 },
-          { title: '古建筑保护与修复', views: 743 },
-          { title: '传统音乐与舞蹈', views: 692 }
-        ],
-        systemStatus: [
-          { name: 'CPU使用率', value: 45 },
-          { name: '内存使用率', value: 62 },
-          { name: '磁盘使用率', value: 38 },
-          { name: '网络带宽', value: 23 }
-        ]
-      },
-      notifications: [
-        {
-          id: 1,
-          type: 'info',
-          title: '系统维护通知',
-          content: '系统将于今晚22:00-24:00进行维护升级',
-          time: '2024-01-07 14:30'
-        },
-        {
-          id: 2,
-          type: 'warning',
-          title: '存储空间不足',
-          content: '系统存储空间使用率已达到80%，请及时清理',
-          time: '2024-01-07 10:15'
-        },
-        {
-          id: 3,
-          type: 'success',
-          title: '新用户注册',
-          content: '今日新增用户15人，较昨日增长25%',
-          time: '2024-01-07 09:45'
-        }
-      ],
-      todos: [
-        {
-          id: 1,
-          title: '审核待发布文章',
-          count: 5,
-          type: 'articles'
-        },
-        {
-          id: 2,
-          title: '处理用户反馈',
-          count: 3,
-          type: 'users'
-        },
-        {
-          id: 3,
-          title: '更新系统公告',
-          count: 2,
-          type: 'announcements'
-        }
-      ]
+  async fetchDashboardData({ commit, dispatch, rootState }) {
+    // 确保基础数据已加载
+    if (!rootState.articles || (rootState.articles.list || []).length === 0) {
+      await dispatch('articles/fetchArticles', null, { root: true })
     }
-    
-    commit('SET_STATS', mockData.stats)
-    commit('SET_CHARTS', mockData.charts)
-    commit('SET_NOTIFICATIONS', mockData.notifications)
-    commit('SET_TODOS', mockData.todos)
+    if (!rootState.announcements || (rootState.announcements.list || []).length === 0) {
+      await dispatch('announcements/fetchAnnouncements', null, { root: true })
+    }
+
+    const articles = (rootState.articles && rootState.articles.list) || []
+    const announcements = (rootState.announcements && rootState.announcements.list) || []
+    const totalUsers = (rootState.users && rootState.users.list && rootState.users.list.length) || 0
+    // 从稳定的指标接口获取今日访问量
+    let dailyVisits = state.stats.dailyVisits
+    try {
+      const m = await getMetrics()
+      if (m && m.data && typeof m.data.dailyVisits === 'number') dailyVisits = m.data.dailyVisits
+    } catch(e) { /* 网络失败时使用上次值 */ }
+
+    // 统计
+    commit('SET_STATS', {
+      totalAnnouncements: announcements.length,
+      totalArticles: articles.length,
+      totalUsers,
+      dailyVisits
+    })
+
+    // 图表：公告发布趋势（按日期聚合）
+    const fmtDate = (dt) => {
+      const d = new Date(dt)
+      const p = (n) => String(n).padStart(2, '0')
+      return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`
+    }
+    const trendMap = {}
+    announcements.forEach(a => {
+      const fallback = a.publishTime || a.date || a.createTime || a.updateTime || new Date().toISOString()
+      const key = fmtDate(fallback)
+      trendMap[key] = (trendMap[key] || 0) + 1
+    })
+    const announcementTrends = Object.keys(trendMap).sort().map(date => ({ date, count: trendMap[date] }))
+
+    // 图表：用户增长（示意：最近7天随机）
+    const today = new Date()
+    const userGrowth = Array.from({ length: 7 }).map((_, idx) => {
+      const d = new Date(today.getFullYear(), today.getMonth(), today.getDate() - (6 - idx))
+      const p = (n) => String(n).padStart(2, '0')
+      return { date: `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`, count: Math.round(5 + Math.random() * 20) }
+    })
+
+    // 图表：阅读排行榜（按 views 降序取前5）
+    const readingRankings = [...articles]
+      .sort((a, b) => (b.views || 0) - (a.views || 0))
+      .slice(0, 5)
+      .map(a => ({ title: a.title, views: a.views || 0 }))
+
+    // 系统状态（示意）
+    const systemStatus = [
+      { name: 'CPU使用率', value: 40 + Math.round(Math.random() * 20) },
+      { name: '内存使用率', value: 55 + Math.round(Math.random() * 20) },
+      { name: '磁盘使用率', value: 30 + Math.round(Math.random() * 20) },
+      { name: '网络带宽', value: 20 + Math.round(Math.random() * 20) }
+    ]
+
+    commit('SET_CHARTS', { announcementTrends, userGrowth, readingRankings, systemStatus })
+
+    // 通知与待办（示意，按数据生成）
+    const notifications = announcements.slice(0, 3).map((a, i) => ({
+      id: i + 1,
+      type: 'info',
+      title: a.title,
+      content: a.content || '',
+      time: a.publishTime || a.date || new Date().toLocaleString()
+    }))
+    const todos = [
+      { id: 1, title: '审核待发布文章', count: articles.filter(a => a.status === 'draft').length, type: 'articles' },
+      { id: 2, title: '更新系统公告', count: announcements.filter(a => a.status !== 'published').length, type: 'announcements' }
+    ]
+    commit('SET_NOTIFICATIONS', notifications)
+    commit('SET_TODOS', todos)
   },
   
   addNotification({ commit }, notification) {
