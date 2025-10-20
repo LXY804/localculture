@@ -1,5 +1,10 @@
 import Vue from 'vue'
 import Vuex from 'vuex'
+import dashboard from './modules/dashboard'
+import announcements from './modules/announcements'
+import articles from './modules/articles'
+import users from './modules/users'
+import settings from './modules/settings'
 
 Vue.use(Vuex)
 
@@ -115,7 +120,7 @@ export default new Vuex.Store({
       const token = 'mock-token-' + Date.now()
       const profile = { id: 'u-' + Date.now(), username: phone, role: isAdmin ? 'admin' : 'user' }
       commit('setAuth', { token, profile })
-      return true
+      return { success: true, role: profile.role }
     },
     async registerWithPhone(context, { phone, password }) {
       void context; void phone; void password; // 标记参数已使用，避免未使用告警
@@ -188,7 +193,13 @@ export default new Vuex.Store({
       }
     },
   },
-  modules: {},
+  modules: {
+    dashboard,
+    announcements,
+    articles,
+    users,
+    settings
+  },
 })
 
 

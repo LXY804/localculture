@@ -26,8 +26,20 @@ export default {
   },
   methods: {
     async onSubmit() {
-      await this.$store.dispatch('loginWithPassword', { phone: this.phone, password: this.password })
-      this.$emit('close')
+      try {
+        const result = await this.$store.dispatch('loginWithPassword', { phone: this.phone, password: this.password })
+        this.$emit('close')
+        
+        // 根据角色自动跳转
+        if (result && result.role === 'admin') {
+          this.$router.push('/admin/dashboard')
+        } else {
+          this.$router.push('/home')
+        }
+      } catch (error) {
+        console.error('登录失败:', error)
+        // 可以添加错误提示
+      }
     }
   }
 }
