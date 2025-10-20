@@ -1,3 +1,5 @@
+import { getAnnouncements } from '@/api/announcements'
+
 const state = {
   list: [],
   detail: null,
@@ -41,70 +43,18 @@ const mutations = {
 }
 
 const actions = {
-  async fetchAnnouncements({ commit }) {
+  async fetchAnnouncements({ commit, rootGetters }) {
     commit('SET_LOADING', true)
-    
-    // 模拟API调用
-    const mockData = [
-      {
-        id: 1,
-        title: '系统维护通知',
-        content: '系统将于今晚22:00-24:00进行维护升级，期间可能影响正常使用，请提前做好准备。',
-        category: '维护通知',
-        status: 'published',
-        author: '管理员',
-        publishTime: '2024-01-07 14:30:00',
-        createTime: '2024-01-07 14:30:00',
-        updateTime: '2024-01-07 14:30:00',
-        views: 156,
-        priority: 'high'
-      },
-      {
-        id: 2,
-        title: '春节活动通知',
-        content: '为庆祝春节，平台将举办传统文化知识竞赛活动，欢迎大家积极参与。',
-        category: '活动通知',
-        status: 'published',
-        author: '管理员',
-        publishTime: '2024-01-05 10:00:00',
-        createTime: '2024-01-05 10:00:00',
-        updateTime: '2024-01-05 10:00:00',
-        views: 234,
-        priority: 'normal'
-      },
-      {
-        id: 3,
-        title: '用户协议更新',
-        content: '平台用户协议已更新，请用户仔细阅读新的条款内容。',
-        category: '系统公告',
-        status: 'published',
-        author: '管理员',
-        publishTime: '2024-01-03 16:20:00',
-        createTime: '2024-01-03 16:20:00',
-        updateTime: '2024-01-03 16:20:00',
-        views: 89,
-        priority: 'normal'
-      },
-      {
-        id: 4,
-        title: '新功能上线',
-        content: '平台新增了文章收藏功能，用户可以将喜欢的文章添加到收藏夹。',
-        category: '系统公告',
-        status: 'draft',
-        author: '管理员',
-        publishTime: null,
-        createTime: '2024-01-06 09:15:00',
-        updateTime: '2024-01-06 09:15:00',
-        views: 0,
-        priority: 'normal'
-      }
-    ]
-    
-    setTimeout(() => {
-      commit('SET_LIST', mockData)
-      commit('SET_PAGINATION', { total: mockData.length })
+    try {
+      const role = rootGetters.currentRole || 'user'
+      const res = await getAnnouncements(role)
+      let list = Array.isArray(res.data) ? res.data : []
+      if (role === 'user') list = list.filter(item => item.status === 'published' || item.visible === true)
+      commit('SET_LIST', list)
+      commit('SET_PAGINATION', { total: list.length })
+    } finally {
       commit('SET_LOADING', false)
-    }, 500)
+    }
   },
   
   async fetchAnnouncementDetail({ commit }, id) {

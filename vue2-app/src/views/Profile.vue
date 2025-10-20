@@ -240,7 +240,7 @@
 
 <script>
 import { mapGetters } from 'vuex'
-import articles from '@/data/articles'
+// 统一数据源后，不再直接引入静态文章数据
 
 export default {
   name: 'ProfilePage',
@@ -340,20 +340,23 @@ export default {
   computed: {
     ...mapGetters(['userActivities', 'username', 'notifications']),
     userCollections() {
+      const list = (this.$store.state.articles && this.$store.state.articles.list) || []
       return this.userActivities.favorites.map(articleId => {
-        const article = articles.find(a => a.id === articleId)
+        const article = list.find(a => String(a.id) === String(articleId))
         return article ? { ...article, collectDate: new Date().toISOString() } : null
       }).filter(Boolean)
     },
     userPosts() {
-      return articles.filter(article => article.author === this.username)
+      const list = (this.$store.state.articles && this.$store.state.articles.list) || []
+      return list.filter(article => article.author === this.username)
     },
     userComments() {
       return this.userActivities.comments
     },
     userLikes() {
+      const list = (this.$store.state.articles && this.$store.state.articles.list) || []
       return this.userActivities.likes.map(articleId => {
-        return articles.find(a => a.id === articleId)
+        return list.find(a => String(a.id) === String(articleId))
       }).filter(Boolean)
     }
   },
@@ -380,7 +383,8 @@ export default {
       return `${d.getFullYear()}年${p(d.getMonth()+1)}月${p(d.getDate())}日 ${p(d.getHours())}:${p(d.getMinutes())}`
     },
     getArticleTitle(articleId) {
-      const article = articles.find(a => a.id === articleId)
+      const list = (this.$store.state.articles && this.$store.state.articles.list) || []
+      const article = list.find(a => String(a.id) === String(articleId))
       return article ? article.title : '未知文章'
     },
     goToArticle(articleId) {

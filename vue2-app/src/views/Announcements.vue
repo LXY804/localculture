@@ -14,13 +14,11 @@
 <script>
 export default {
   name: 'AnnouncementsPage',
-  data() {
-    return {
-      list: [
-        { id: 'n1', title: '公告列表', brief: '中秋文化活动报名开启', date: '2025-10-13T15:59:53' },
-        { id: 'n2', title: '场馆临时闭馆通知', brief: '本周三设备检修，暂停入馆参观。', date: '2025-10-12T10:12:33' },
-      ],
-    }
+  computed: {
+    list() { return this.$store.state.announcements.list },
+  },
+  created() {
+    this.$store.dispatch('announcements/fetchAnnouncements')
   },
   methods: {
     formatDate(iso) {

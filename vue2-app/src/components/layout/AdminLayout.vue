@@ -23,13 +23,25 @@
             <i class="el-icon-document"></i>
             <span>内容管理</span>
           </template>
-          <el-menu-item index="/admin/announcements">
-            <i class="el-icon-bell"></i>
-            <span slot="title">公告管理</span>
+          <el-menu-item index="/admin/content">
+            <i class="el-icon-data-analysis"></i>
+            <span slot="title">内容概览</span>
           </el-menu-item>
           <el-menu-item index="/admin/articles">
             <i class="el-icon-edit-outline"></i>
             <span slot="title">文章管理</span>
+          </el-menu-item>
+          <el-menu-item index="/admin/announcements">
+            <i class="el-icon-bell"></i>
+            <span slot="title">公告管理</span>
+          </el-menu-item>
+          <el-menu-item index="/admin/categories">
+            <i class="el-icon-folder"></i>
+            <span slot="title">分类管理</span>
+          </el-menu-item>
+          <el-menu-item index="/admin/tags">
+            <i class="el-icon-price-tag"></i>
+            <span slot="title">标签管理</span>
           </el-menu-item>
         </el-submenu>
         

@@ -1,3 +1,5 @@
+import { getArticles } from '@/api/articles'
+
 const state = {
   list: [],
   detail: null,
@@ -42,82 +44,18 @@ const mutations = {
 }
 
 const actions = {
-  async fetchArticles({ commit }) {
+  async fetchArticles({ commit, rootGetters }) {
     commit('SET_LOADING', true)
-    
-    // 模拟API调用
-    const mockData = [
-      {
-        id: 1,
-        title: '传统文化保护的重要性',
-        content: '传统文化是一个民族的精神财富，保护传统文化对于维护民族特色、传承历史文明具有重要意义...',
-        category: '传统文化',
-        tags: ['保护', '传承', '历史'],
-        status: 'published',
-        author: '张三',
-        publishTime: '2024-01-07 10:30:00',
-        createTime: '2024-01-07 10:30:00',
-        updateTime: '2024-01-07 10:30:00',
-        views: 1250,
-        likes: 45,
-        comments: 12,
-        cover: '/assets/craft.jpg'
-      },
-      {
-        id: 2,
-        title: '地方民俗节庆活动',
-        content: '地方民俗节庆活动是传统文化的重要组成部分，通过节庆活动可以更好地传承和弘扬传统文化...',
-        category: '民俗节庆',
-        tags: ['节庆', '民俗', '活动'],
-        status: 'published',
-        author: '李四',
-        publishTime: '2024-01-06 15:20:00',
-        createTime: '2024-01-06 15:20:00',
-        updateTime: '2024-01-06 15:20:00',
-        views: 980,
-        likes: 32,
-        comments: 8,
-        cover: '/assets/festival.jpg'
-      },
-      {
-        id: 3,
-        title: '传统手工艺传承',
-        content: '传统手工艺是劳动人民智慧的结晶，在现代社会中如何传承和发展传统手工艺是一个重要课题...',
-        category: '手工艺',
-        tags: ['手工艺', '传承', '创新'],
-        status: 'published',
-        author: '王五',
-        publishTime: '2024-01-05 09:15:00',
-        createTime: '2024-01-05 09:15:00',
-        updateTime: '2024-01-05 09:15:00',
-        views: 856,
-        likes: 28,
-        comments: 15,
-        cover: '/assets/craft.jpg'
-      },
-      {
-        id: 4,
-        title: '古建筑保护与修复',
-        content: '古建筑是历史文化的载体，保护古建筑对于传承历史文化具有重要意义...',
-        category: '古建筑',
-        tags: ['古建筑', '保护', '修复'],
-        status: 'draft',
-        author: '赵六',
-        publishTime: null,
-        createTime: '2024-01-04 14:45:00',
-        updateTime: '2024-01-04 14:45:00',
-        views: 0,
-        likes: 0,
-        comments: 0,
-        cover: '/assets/temple.jpg'
-      }
-    ]
-    
-    setTimeout(() => {
-      commit('SET_LIST', mockData)
-      commit('SET_PAGINATION', { total: mockData.length })
+    try {
+      const role = rootGetters.currentRole || 'user'
+      const res = await getArticles(role)
+      let list = Array.isArray(res.data) ? res.data : []
+      if (role === 'user') list = list.filter(item => item.status === 'published' || item.visible === true)
+      commit('SET_LIST', list)
+      commit('SET_PAGINATION', { total: list.length })
+    } finally {
       commit('SET_LOADING', false)
-    }, 500)
+    }
   },
   
   async fetchArticleDetail({ commit }, id) {

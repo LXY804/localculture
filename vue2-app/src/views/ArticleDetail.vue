@@ -141,7 +141,7 @@
 </template>
 
 <script>
-import articles from '@/data/articles'
+// 统一从 Vuex 获取文章详情，移除静态数据依赖
 import { mapGetters, mapActions } from 'vuex'
 
 export default {
@@ -158,7 +158,9 @@ export default {
     ...mapGetters(['isLiked', 'isFavorited', 'getCommentsByArticle', 'isCommentLiked']),
     article() {
       const targetId = this.$route.params.id || this.id
-      return articles.find(a => a.id === String(targetId)) || null
+      const list = this.$store.state.articles && this.$store.state.articles.list || []
+      const found = list.find(a => String(a.id) === String(targetId))
+      return found || null
     },
     articleId() {
       return this.article ? this.article.id : null
@@ -181,6 +183,12 @@ export default {
         map[c.parentCommentId].push(c)
       })
       return map
+    }
+  },
+  created() {
+    // 确保文章列表已加载（用户端/管理端统一从Vuex获取）
+    if (!this.$store.state.articles || (this.$store.state.articles.list || []).length === 0) {
+      this.$store.dispatch('articles/fetchArticles')
     }
   },
   methods: {

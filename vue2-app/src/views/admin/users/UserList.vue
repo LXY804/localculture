@@ -1,130 +1,235 @@
 <template>
   <div class="user-list">
-    <el-card>
-      <div slot="header" class="card-header">
-        <span>用户管理</span>
-        <el-button type="primary" @click="createUser">
-          <i class="el-icon-plus"></i> 添加用户
+    <!-- 页面标题和操作区 -->
+    <div class="page-header">
+      <h2 class="page-title">用户管理</h2>
+      <el-button type="primary" @click="createUser" class="add-btn">
+        <i class="el-icon-plus"></i> 添加用户
+      </el-button>
+    </div>
+
+    <!-- 搜索和筛选区域 -->
+    <el-card class="filter-card" shadow="never">
+      <div slot="header" class="filter-header">
+        <span class="filter-title">筛选条件</span>
+        <el-button 
+          type="text" 
+          @click="filterCollapsed = !filterCollapsed"
+          class="collapse-btn"
+        >
+          <i :class="filterCollapsed ? 'el-icon-arrow-down' : 'el-icon-arrow-up'"></i>
+          {{ filterCollapsed ? '展开' : '收起' }}
         </el-button>
       </div>
+      
+      <el-collapse-transition>
+        <div v-show="!filterCollapsed" class="filter-content">
+          <el-form :inline="true" :model="searchForm" class="search-form">
+            <div class="filter-fields">
+              <el-form-item label="用户名">
+                <el-input
+                  v-model="searchForm.username"
+                  placeholder="请输入用户名"
+                  clearable
+                  @keyup.enter.native="handleSearch"
+                  class="search-input"
+                />
+              </el-form-item>
+              <el-form-item label="邮箱">
+                <el-input
+                  v-model="searchForm.email"
+                  placeholder="请输入邮箱"
+                  clearable
+                  @keyup.enter.native="handleSearch"
+                  class="search-input"
+                />
+              </el-form-item>
+              <el-form-item label="角色">
+                <el-select v-model="searchForm.role" placeholder="请选择角色" clearable class="search-select">
+                  <el-option
+                    v-for="role in roles"
+                    :key="role"
+                    :label="getRoleText(role)"
+                    :value="role"
+                  />
+                </el-select>
+              </el-form-item>
+              <el-form-item label="状态">
+                <el-select v-model="searchForm.status" placeholder="请选择状态" clearable class="search-select">
+                  <el-option label="正常" value="active" />
+                  <el-option label="禁用" value="inactive" />
+                </el-select>
+              </el-form-item>
+            </div>
+            <div class="search-actions">
+              <el-button type="primary" @click="handleSearch" class="search-btn">
+                <i class="el-icon-search"></i>
+                <span>搜索</span>
+              </el-button>
+            </div>
+          </el-form>
+        </div>
+      </el-collapse-transition>
+    </el-card>
 
-      <!-- 搜索和筛选 -->
-      <div class="filter-bar">
-        <el-form :inline="true" :model="searchForm" class="search-form">
-          <el-form-item label="用户名">
-            <el-input
-              v-model="searchForm.username"
-              placeholder="请输入用户名"
-              clearable
-              @keyup.enter.native="handleSearch"
-            />
-          </el-form-item>
-          <el-form-item label="邮箱">
-            <el-input
-              v-model="searchForm.email"
-              placeholder="请输入邮箱"
-              clearable
-              @keyup.enter.native="handleSearch"
-            />
-          </el-form-item>
-          <el-form-item label="角色">
-            <el-select v-model="searchForm.role" placeholder="请选择角色" clearable>
-              <el-option
-                v-for="role in roles"
-                :key="role"
-                :label="getRoleText(role)"
-                :value="role"
-              />
-            </el-select>
-          </el-form-item>
-          <el-form-item label="状态">
-            <el-select v-model="searchForm.status" placeholder="请选择状态" clearable>
-              <el-option label="正常" value="active" />
-              <el-option label="禁用" value="inactive" />
-            </el-select>
-          </el-form-item>
-          <el-form-item>
-            <el-button type="primary" @click="handleSearch">搜索</el-button>
-            <el-button @click="handleReset">重置</el-button>
-          </el-form-item>
-        </el-form>
+    <!-- 表格容器 -->
+    <el-card class="table-card" shadow="never">
+      <!-- 批量操作栏 -->
+      <div v-if="selectedItems.length > 0" class="batch-actions-bar">
+        <div class="batch-info">
+          <i class="el-icon-info"></i>
+          <span>已选择 <strong>{{ selectedItems.length }}</strong> 项</span>
+        </div>
+        <div class="batch-buttons">
+          <el-button type="warning" size="small" @click="batchDisable" class="batch-btn">
+            <i class="el-icon-remove-outline"></i> 批量禁用
+          </el-button>
+          <el-button type="success" size="small" @click="batchEnable" class="batch-btn">
+            <i class="el-icon-check"></i> 批量启用
+          </el-button>
+          <el-button type="danger" size="small" @click="batchDelete" class="batch-btn">
+            <i class="el-icon-delete"></i> 批量删除
+          </el-button>
+        </div>
       </div>
 
       <!-- 表格 -->
       <el-table
         v-loading="loading"
         :data="filteredList"
-        stripe
         @selection-change="handleSelectionChange"
+        class="user-table"
+        :row-class-name="tableRowClassName"
+        :header-cell-style="{ background: '#fafafa', color: '#606266', fontWeight: '500' }"
       >
         <el-table-column type="selection" width="55" />
-        <el-table-column prop="id" label="ID" width="80" />
-        <el-table-column prop="avatar" label="头像" width="80">
+        <el-table-column prop="id" label="ID" width="60" align="center">
           <template slot-scope="scope">
-            <img :src="scope.row.avatar" alt="头像" class="avatar-image" />
+            <span class="user-id">{{ scope.row.id }}</span>
           </template>
         </el-table-column>
-        <el-table-column prop="username" label="用户名" width="120" />
-        <el-table-column prop="email" label="邮箱" min-width="180" show-overflow-tooltip />
-        <el-table-column prop="phone" label="手机号" width="120" />
-        <el-table-column prop="role" label="角色" width="100">
+        <el-table-column prop="avatar" label="头像" width="80" align="center">
           <template slot-scope="scope">
-            <el-tag :type="getRoleType(scope.row.role)" size="small">
+            <div class="avatar-container" @mouseenter="showUserCard(scope.row)" @mouseleave="hideUserCard">
+              <img 
+                v-if="scope.row.avatar && scope.row.avatar !== 'avatar'" 
+                :src="scope.row.avatar" 
+                alt="头像" 
+                class="avatar-image"
+                @error="handleAvatarError"
+              />
+              <i v-else class="el-icon-user avatar-placeholder"></i>
+            </div>
+          </template>
+        </el-table-column>
+        <el-table-column prop="username" label="用户名" width="120" show-overflow-tooltip>
+          <template slot-scope="scope">
+            <span class="username-text" :title="scope.row.username">{{ scope.row.username }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column prop="email" label="邮箱" min-width="180" show-overflow-tooltip />
+        <el-table-column prop="phone" label="手机号" width="120" show-overflow-tooltip />
+        <el-table-column prop="role" label="角色" width="100" align="center">
+          <template slot-scope="scope">
+            <el-tag 
+              :class="['role-tag', `role-${scope.row.role}`]" 
+              size="small"
+              effect="light"
+            >
               {{ getRoleText(scope.row.role) }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="status" label="状态" width="100">
+        <el-table-column prop="status" label="状态" width="100" align="center">
           <template slot-scope="scope">
-            <el-tag :type="getStatusType(scope.row.status)" size="small">
+            <el-tag 
+              :class="['status-tag', `status-${scope.row.status}`]" 
+              size="small"
+              effect="light"
+              @click.native="toggleUserStatus(scope.row)"
+            >
+              <i :class="scope.row.status === 'active' ? 'el-icon-check' : 'el-icon-close'"></i>
               {{ getStatusText(scope.row.status) }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="createTime" label="注册时间" width="160" />
-        <el-table-column prop="lastLoginTime" label="最后登录" width="160">
+        <el-table-column prop="createTime" label="注册时间" width="160" show-overflow-tooltip />
+        <el-table-column prop="lastLoginTime" label="最后登录" width="160" show-overflow-tooltip>
           <template slot-scope="scope">
             {{ scope.row.lastLoginTime || '-' }}
           </template>
         </el-table-column>
-        <el-table-column prop="loginCount" label="登录次数" width="100" />
-        <el-table-column label="操作" width="300" fixed="right">
+        <el-table-column prop="loginCount" label="登录次数" width="100" align="center" />
+        <el-table-column label="操作" width="200" fixed="right" align="center">
           <template slot-scope="scope">
-            <el-button size="mini" @click="viewUser(scope.row)">查看</el-button>
-            <el-button size="mini" type="primary" @click="editUser(scope.row)">编辑</el-button>
-            <el-button 
-              size="mini" 
-              :type="scope.row.status === 'active' ? 'warning' : 'success'"
-              @click="toggleUserStatus(scope.row)"
-            >
-              {{ scope.row.status === 'active' ? '禁用' : '启用' }}
-            </el-button>
-            <el-button size="mini" type="danger" @click="deleteUser(scope.row)">删除</el-button>
+            <div class="action-buttons">
+              <el-button size="mini" type="primary" @click="editUser(scope.row)" class="action-btn edit-btn">
+                <i class="el-icon-edit"></i>
+              </el-button>
+              <el-dropdown @command="(command) => handleDropdownCommand(command, scope.row)" trigger="click">
+                <el-button size="mini" class="action-btn more-btn">
+                  <i class="el-icon-more"></i>
+                </el-button>
+                <el-dropdown-menu slot="dropdown">
+                  <el-dropdown-item command="view">
+                    <i class="el-icon-view"></i> 查看
+                  </el-dropdown-item>
+                  <el-dropdown-item 
+                    :command="scope.row.status === 'active' ? 'disable' : 'enable'"
+                    :class="scope.row.status === 'active' ? 'danger-item' : 'success-item'"
+                  >
+                    <i :class="scope.row.status === 'active' ? 'el-icon-remove-outline' : 'el-icon-check'"></i>
+                    {{ scope.row.status === 'active' ? '禁用' : '启用' }}
+                  </el-dropdown-item>
+                  <el-dropdown-item command="delete" class="danger-item">
+                    <i class="el-icon-delete"></i> 删除
+                  </el-dropdown-item>
+                </el-dropdown-menu>
+              </el-dropdown>
+            </div>
           </template>
         </el-table-column>
       </el-table>
 
-      <!-- 批量操作 -->
-      <div v-if="selectedItems.length > 0" class="batch-actions">
-        <span>已选择 {{ selectedItems.length }} 项</span>
-        <el-button type="warning" size="small" @click="batchDisable">批量禁用</el-button>
-        <el-button type="success" size="small" @click="batchEnable">批量启用</el-button>
-        <el-button type="danger" size="small" @click="batchDelete">批量删除</el-button>
-      </div>
-
-      <!-- 分页 -->
-      <div class="pagination">
-        <el-pagination
-          @size-change="handleSizeChange"
-          @current-change="handleCurrentChange"
-          :current-page="pagination.current"
-          :page-sizes="[10, 20, 50, 100]"
-          :page-size="pagination.pageSize"
-          :total="pagination.total"
-          layout="total, sizes, prev, pager, next, jumper"
-        />
+      <!-- 分页信息 -->
+      <div class="pagination-info">
+        <span class="total-info">共 <strong>{{ pagination.total }}</strong> 条用户记录</span>
       </div>
     </el-card>
+
+    <!-- 分页 -->
+    <div class="pagination">
+      <el-pagination
+        @size-change="handleSizeChange"
+        @current-change="handleCurrentChange"
+        :current-page="pagination.current"
+        :page-sizes="[10, 20, 50, 100]"
+        :page-size="pagination.pageSize"
+        :total="pagination.total"
+        layout="total, sizes, prev, pager, next, jumper"
+        class="pagination-component"
+      />
+    </div>
+
+    <!-- 用户卡片悬浮提示 -->
+    <div v-if="showUserCardTooltip" class="user-card-tooltip" :style="tooltipStyle">
+      <div class="user-card-content">
+        <img :src="hoveredUser.avatar" alt="头像" class="tooltip-avatar" v-if="hoveredUser.avatar && hoveredUser.avatar !== 'avatar'" />
+        <i v-else class="el-icon-user tooltip-avatar-placeholder"></i>
+        <div class="tooltip-info">
+          <div class="tooltip-username">{{ hoveredUser.username }}</div>
+          <div class="tooltip-email">{{ hoveredUser.email }}</div>
+          <div class="tooltip-role">
+            <el-tag :class="['tooltip-role-tag', `role-${hoveredUser.role}`]" size="mini">
+              {{ getRoleText(hoveredUser.role) }}
+            </el-tag>
+            <el-tag :class="['tooltip-status-tag', `status-${hoveredUser.status}`]" size="mini">
+              {{ getStatusText(hoveredUser.status) }}
+            </el-tag>
+          </div>
+        </div>
+      </div>
+    </div>
 
     <!-- 创建/编辑用户对话框 -->
     <el-dialog
@@ -281,6 +386,7 @@ export default {
   data() {
     return {
       loading: false,
+      filterCollapsed: false,
       searchForm: {
         username: '',
         email: '',
@@ -293,6 +399,9 @@ export default {
       isEdit: false,
       currentUser: null,
       activeTab: 'basic',
+      showUserCardTooltip: false,
+      hoveredUser: {},
+      tooltipStyle: {},
       userForm: {
         username: '',
         email: '',
@@ -596,44 +705,280 @@ export default {
         'inactive': '禁用'
       }
       return textMap[status] || status
+    },
+    // 新增方法
+    tableRowClassName({ rowIndex }) {
+      return rowIndex % 2 === 1 ? 'even-row' : 'odd-row'
+    },
+    handleAvatarError(event) {
+      event.target.style.display = 'none'
+      event.target.nextElementSibling.style.display = 'inline-block'
+    },
+    showUserCard(user) {
+      this.hoveredUser = user
+      this.showUserCardTooltip = true
+      // 简单的定位逻辑，实际项目中可以使用更精确的定位
+      this.tooltipStyle = {
+        position: 'fixed',
+        top: '100px',
+        right: '20px',
+        zIndex: 9999
+      }
+    },
+    hideUserCard() {
+      this.showUserCardTooltip = false
+      this.hoveredUser = {}
+    },
+    handleDropdownCommand(command, row) {
+      switch (command) {
+        case 'view':
+          this.viewUser(row)
+          break
+        case 'enable':
+          this.toggleUserStatus(row)
+          break
+        case 'disable':
+          this.toggleUserStatus(row)
+          break
+        case 'delete':
+          this.deleteUser(row)
+          break
+      }
     }
   }
 }
 </script>
 
 <style scoped>
+/* 页面整体布局 */
 .user-list {
-  padding: 20px;
+  padding: 24px;
+  background: #f5f7fa;
+  min-height: 100vh;
 }
 
-.card-header {
+/* 页面标题区域 */
+.page-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  margin-bottom: 24px;
+  padding: 0 4px;
 }
 
-.filter-bar {
-  margin-bottom: 20px;
-  padding: 20px;
+.page-title {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 600;
+  color: #303133;
+}
+
+.add-btn {
+  border-radius: 8px;
+  padding: 12px 24px;
+  font-weight: 500;
+  box-shadow: 0 2px 8px rgba(64, 158, 255, 0.2);
+  transition: all 0.3s ease;
+}
+
+.add-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(64, 158, 255, 0.3);
+}
+
+/* 筛选区域 */
+.filter-card {
+  margin-bottom: 24px;
+  border-radius: 12px;
+  border: 1px solid #e4e7ed;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.filter-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 4px;
+}
+
+.filter-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #303133;
+}
+
+.collapse-btn {
+  color: #909399;
+  font-size: 14px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  transition: all 0.3s ease;
+}
+
+.collapse-btn:hover {
   background: #f5f7fa;
-  border-radius: 4px;
+  color: #409eff;
+}
+
+.filter-content {
+  padding: 8px 0;
 }
 
 .search-form {
   margin: 0;
+  position: relative;
+  padding-bottom: 50px; /* 为底部按钮留出空间 */
 }
 
-.batch-actions {
-  margin: 20px 0;
-  padding: 10px;
-  background: #f0f9ff;
-  border: 1px solid #b3d8ff;
-  border-radius: 4px;
+.filter-fields {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 16px;
 }
 
-.pagination {
-  margin-top: 20px;
-  text-align: right;
+.search-form .el-form-item {
+  margin-right: 0;
+  margin-bottom: 0;
+}
+
+.search-input,
+.search-select {
+  width: 200px;
+  border-radius: 8px;
+}
+
+.search-actions {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  margin: 0;
+}
+
+.button-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: nowrap;
+}
+
+.search-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  padding: 10px 20px;
+  font-weight: 500;
+  box-shadow: 0 2px 6px rgba(64, 158, 255, 0.2);
+  transition: all 0.3s ease;
+  white-space: nowrap;
+  flex-shrink: 0;
+  min-width: 80px;
+  gap: 6px;
+}
+
+.search-btn i {
+  line-height: 1;
+  vertical-align: middle;
+}
+
+.search-btn span {
+  line-height: 1;
+  vertical-align: middle;
+}
+
+.search-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(64, 158, 255, 0.3);
+}
+
+/* 重置按钮已移除 */
+
+/* 表格容器 */
+.table-card {
+  border-radius: 12px;
+  border: 1px solid #e4e7ed;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  overflow: hidden;
+}
+
+/* 批量操作栏 */
+.batch-actions-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  background: linear-gradient(135deg, #f0f9ff 0%, #e6f7ff 100%);
+  border-bottom: 1px solid #b3d8ff;
+  margin: 0;
+}
+
+.batch-info {
+  display: flex;
+  align-items: center;
+  color: #1890ff;
+  font-size: 14px;
+}
+
+.batch-info i {
+  margin-right: 8px;
+  font-size: 16px;
+}
+
+.batch-buttons {
+  display: flex;
+  gap: 12px;
+}
+
+.batch-btn {
+  border-radius: 8px;
+  padding: 8px 16px;
+  font-weight: 500;
+  transition: all 0.3s ease;
+}
+
+.batch-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+/* 表格样式 */
+.user-table {
+  font-size: 14px;
+}
+
+.user-table .el-table__row {
+  height: 50px;
+  transition: all 0.3s ease;
+}
+
+.user-table .el-table__row:hover {
+  background: #f8f9fa !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.user-table .even-row {
+  background: #fafafa;
+}
+
+.user-table .odd-row {
+  background: #ffffff;
+}
+
+/* 用户ID样式 */
+.user-id {
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 12px;
+  color: #909399;
+  font-weight: 500;
+}
+
+/* 头像样式 */
+.avatar-container {
+  position: relative;
+  display: inline-block;
+  cursor: pointer;
 }
 
 .avatar-image {
@@ -641,12 +986,256 @@ export default {
   height: 40px;
   border-radius: 50%;
   object-fit: cover;
+  border: 2px solid #f0f0f0;
+  transition: all 0.3s ease;
 }
 
+.avatar-image:hover {
+  border-color: #409eff;
+  transform: scale(1.05);
+}
+
+.avatar-placeholder {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: #f5f7fa;
+  color: #c0c4cc;
+  font-size: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid #e4e7ed;
+}
+
+/* 用户名样式 */
+.username-text {
+  font-weight: 600;
+  color: #303133;
+  cursor: pointer;
+  transition: color 0.3s ease;
+}
+
+.username-text:hover {
+  color: #409eff;
+}
+
+/* 角色标签样式 */
+.role-tag {
+  border-radius: 12px;
+  font-weight: 500;
+  padding: 4px 12px;
+  border: none;
+}
+
+.role-admin {
+  background: #fef2f2;
+  color: #dc2626;
+}
+
+.role-editor {
+  background: #fffbeb;
+  color: #d97706;
+}
+
+.role-user {
+  background: #f0fdf4;
+  color: #16a34a;
+}
+
+/* 状态标签样式 */
+.status-tag {
+  border-radius: 12px;
+  font-weight: 500;
+  padding: 4px 12px;
+  border: none;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.status-tag:hover {
+  transform: scale(1.05);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.status-active {
+  background: #f0fdf4;
+  color: #16a34a;
+}
+
+.status-inactive {
+  background: #f5f5f5;
+  color: #6b7280;
+}
+
+/* 操作按钮样式 */
+.action-buttons {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.action-btn {
+  border-radius: 8px;
+  padding: 6px 12px;
+  font-weight: 500;
+  transition: all 0.3s ease;
+  border: none;
+  min-width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.edit-btn {
+  background: #409eff;
+  color: white;
+}
+
+.edit-btn:hover {
+  background: #337ecc;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(64, 158, 255, 0.3);
+}
+
+.more-btn {
+  background: #f5f7fa;
+  color: #606266;
+  border: 1px solid #dcdfe6;
+}
+
+.more-btn:hover {
+  background: #ecf5ff;
+  color: #409eff;
+  border-color: #b3d8ff;
+  transform: translateY(-1px);
+}
+
+/* 下拉菜单样式 */
+.danger-item {
+  color: #f56c6c !important;
+}
+
+.success-item {
+  color: #67c23a !important;
+}
+
+/* 分页信息 */
+.pagination-info {
+  padding: 16px 20px;
+  background: #fafafa;
+  border-top: 1px solid #e4e7ed;
+  text-align: left;
+}
+
+.total-info {
+  color: #606266;
+  font-size: 14px;
+}
+
+.total-info strong {
+  color: #303133;
+  font-weight: 600;
+}
+
+/* 分页组件 */
+.pagination {
+  margin-top: 24px;
+  text-align: right;
+  padding: 0 4px;
+}
+
+.pagination-component {
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+/* 用户卡片悬浮提示 */
+.user-card-tooltip {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+  border: 1px solid #e4e7ed;
+  padding: 16px;
+  min-width: 200px;
+  animation: fadeInUp 0.3s ease;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.user-card-content {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.tooltip-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid #f0f0f0;
+}
+
+.tooltip-avatar-placeholder {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: #f5f7fa;
+  color: #c0c4cc;
+  font-size: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid #e4e7ed;
+}
+
+.tooltip-info {
+  flex: 1;
+}
+
+.tooltip-username {
+  font-size: 16px;
+  font-weight: 600;
+  color: #303133;
+  margin-bottom: 4px;
+}
+
+.tooltip-email {
+  font-size: 12px;
+  color: #909399;
+  margin-bottom: 8px;
+}
+
+.tooltip-role {
+  display: flex;
+  gap: 6px;
+}
+
+.tooltip-role-tag,
+.tooltip-status-tag {
+  border-radius: 8px;
+  font-size: 10px;
+  padding: 2px 6px;
+  border: none;
+}
+
+/* 用户详情对话框样式 */
 .user-detail .user-header {
   display: flex;
   align-items: center;
-  margin-bottom: 20px;
+  margin-bottom: 24px;
   padding-bottom: 20px;
   border-bottom: 1px solid #ebeef5;
 }
@@ -657,21 +1246,101 @@ export default {
   border-radius: 50%;
   object-fit: cover;
   margin-right: 20px;
+  border: 3px solid #f0f0f0;
 }
 
 .user-info h3 {
-  margin: 0 0 10px 0;
+  margin: 0 0 8px 0;
   color: #303133;
+  font-size: 20px;
+  font-weight: 600;
 }
 
 .user-info p {
-  margin: 0 0 10px 0;
+  margin: 0 0 12px 0;
   color: #606266;
+  font-size: 14px;
 }
 
 .log-ip {
   color: #909399;
   font-size: 12px;
   margin: 5px 0 0 0;
+}
+
+/* 响应式设计 */
+@media (max-width: 1200px) {
+  .search-form .el-form-item {
+    margin-right: 16px;
+  }
+  
+  .search-input,
+  .search-select {
+    width: 180px;
+  }
+}
+
+@media (max-width: 768px) {
+  .user-list {
+    padding: 16px;
+  }
+  
+  .page-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 16px;
+  }
+  
+  .filter-fields {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+  
+  .search-form .el-form-item {
+    margin-right: 0;
+    margin-bottom: 0;
+  }
+  
+  .search-input,
+  .search-select {
+    width: 100%;
+  }
+  
+  .search-actions {
+    position: static;
+    margin-top: 16px;
+    text-align: left;
+  }
+  
+  .button-group {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+  
+  .batch-actions-bar {
+    flex-direction: column;
+    gap: 12px;
+    align-items: flex-start;
+  }
+  
+  .batch-buttons {
+    width: 100%;
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 480px) {
+  .button-group {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+  
+  .search-btn,
+  .reset-btn {
+    width: 100%;
+    min-width: auto;
+  }
 }
 </style>
