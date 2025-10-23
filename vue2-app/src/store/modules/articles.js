@@ -89,33 +89,69 @@ const actions = {
   },
   
   async createArticle({ commit }, articleData) {
-    const newArticle = {
-      id: Date.now(),
-      ...articleData,
-      author: '当前用户',
-      createTime: new Date().toLocaleString(),
-      updateTime: new Date().toLocaleString(),
-      views: 0,
-      likes: 0,
-      comments: 0
+    try {
+      const { createArticle } = await import('@/api/articles')
+      const response = await createArticle(articleData)
+      
+      if (response.data.success) {
+        const newArticle = {
+          id: response.data.id,
+          ...articleData,
+          author: '当前用户',
+          createTime: new Date().toLocaleString(),
+          updateTime: new Date().toLocaleString(),
+          views: 0,
+          likes: 0,
+          comments: 0
+        }
+        
+        commit('ADD_ARTICLE', newArticle)
+        return newArticle
+      } else {
+        throw new Error(response.data.message || '创建失败')
+      }
+    } catch (error) {
+      console.error('创建文章失败:', error)
+      throw error
     }
-    
-    commit('ADD_ARTICLE', newArticle)
-    return newArticle
   },
   
   async updateArticle({ commit }, articleData) {
-    const updatedArticle = {
-      ...articleData,
-      updateTime: new Date().toLocaleString()
+    try {
+      const { updateArticle } = await import('@/api/articles')
+      const response = await updateArticle(articleData.id, articleData)
+      
+      if (response.data.success) {
+        const updatedArticle = {
+          ...articleData,
+          updateTime: new Date().toLocaleString()
+        }
+        
+        commit('UPDATE_ARTICLE', updatedArticle)
+        return updatedArticle
+      } else {
+        throw new Error(response.data.message || '更新失败')
+      }
+    } catch (error) {
+      console.error('更新文章失败:', error)
+      throw error
     }
-    
-    commit('UPDATE_ARTICLE', updatedArticle)
-    return updatedArticle
   },
   
   async deleteArticle({ commit }, id) {
-    commit('DELETE_ARTICLE', id)
+    try {
+      const { deleteArticle } = await import('@/api/articles')
+      const response = await deleteArticle(id)
+      
+      if (response.data.success) {
+        commit('DELETE_ARTICLE', id)
+      } else {
+        throw new Error(response.data.message || '删除失败')
+      }
+    } catch (error) {
+      console.error('删除文章失败:', error)
+      throw error
+    }
   }
 }
 

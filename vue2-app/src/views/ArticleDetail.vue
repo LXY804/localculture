@@ -8,29 +8,47 @@
       </router-link>
     </div>
 
-    <template v-if="article">
-      <!-- 文章内容区域 -->
+    <!-- 加载状态 -->
+    <div v-if="loading" class="loading-container">
+      <div class="loading-spinner"></div>
+      <p>正在加载文章...</p>
+    </div>
+    
+    <!-- 错误状态 -->
+    <div v-else-if="error" class="error-container">
+      <h2>加载失败</h2>
+      <p>{{ error }}</p>
+      <button @click="fetchArticleDetail" class="btn">重试</button>
+    </div>
+    
+    <!-- 文章内容 -->
+    <template v-else-if="article">
       <div class="article-container">
         <!-- 文章头部 -->
         <header class="article-header">
           <h1 class="article-title">{{ article.title }}</h1>
-          <p class="article-summary">{{ article.summary }}</p>
           
           <!-- 文章元信息 -->
           <div class="article-meta">
             <div class="meta-item">
-              <span class="meta-label">发布人：</span>
-              <span class="meta-value">{{ article.author || '匿名用户' }}</span>
+              <span class="meta-label">分类：</span>
+              <span class="meta-value">{{ article.category || '未分类' }}</span>
             </div>
             <div class="meta-item">
               <span class="meta-label">发布时间：</span>
-              <span class="meta-value">{{ formatDate(article.date) }}</span>
+              <span class="meta-value">{{ formatDate(article.created_at) }}</span>
             </div>
-            <div class="meta-item" v-if="article.tags && article.tags.length">
-              <span class="meta-label">标签：</span>
-              <div class="tags">
-                <span v-for="tag in article.tags" :key="tag" class="tag"># {{ tag }}</span>
-              </div>
+            <div class="meta-item">
+              <span class="meta-label">浏览量：</span>
+              <span class="meta-value">{{ article.views }}</span>
+            </div>
+            <div class="meta-item">
+              <span class="meta-label">点赞数：</span>
+              <span class="meta-value">{{ article.likes }}</span>
+            </div>
+            <div class="meta-item">
+              <span class="meta-label">评论数：</span>
+              <span class="meta-value">{{ article.comments_count }}</span>
             </div>
           </div>
         </header>
@@ -41,7 +59,7 @@
         </div>
 
         <!-- 互动区域 -->
-        <div class="interaction-section">
+        <div class="interaction-section" v-if="isLoggedIn">
           <div class="interaction-buttons">
             <button 
               class="interaction-btn like-btn" 
@@ -61,13 +79,24 @@
             </button>
           </div>
         </div>
+        
+        <!-- 未登录提示 -->
+        <div class="login-prompt" v-else>
+          <div class="prompt-content">
+            <p>登录后可进行点赞和收藏操作</p>
+            <div class="prompt-actions">
+              <router-link to="/login" class="btn login-btn">立即登录</router-link>
+              <router-link to="/register" class="btn register-btn">注册账号</router-link>
+            </div>
+          </div>
+        </div>
 
         <!-- 评论区域 -->
         <div class="comments-section">
           <h3 class="comments-title">评论 ({{ comments.length }})</h3>
           
           <!-- 发表评论 -->
-          <div class="comment-form">
+          <div class="comment-form" v-if="isLoggedIn">
             <textarea 
               v-model="newComment" 
               placeholder="写下你的想法..."
@@ -82,6 +111,15 @@
               发表评论
             </button>
           </div>
+          
+          <!-- 未登录用户评论提示 -->
+          <div class="comment-login-prompt" v-else>
+            <p>登录后可发表评论</p>
+            <div class="prompt-actions">
+              <router-link to="/login" class="btn login-btn">立即登录</router-link>
+              <router-link to="/register" class="btn register-btn">注册账号</router-link>
+            </div>
+          </div>
 
           <!-- 评论列表 -->
           <div class="comments-list">
@@ -92,19 +130,11 @@
               :id="'comment-' + comment.id"
             >
               <div class="comment-header">
-                <span class="comment-author">{{ comment.author }}</span>
-                <span class="comment-date">{{ formatDate(comment.date) }}</span>
+                <span class="comment-author">{{ comment.nickname || comment.username }}</span>
+                <span class="comment-date">{{ formatDate(comment.created_at) }}</span>
               </div>
               <div class="comment-content">{{ comment.content }}</div>
-              <div class="comment-actions">
-                <button 
-                  class="comment-like-btn"
-                  :class="{ active: isCommentLiked(comment.id) }"
-                  @click="onToggleCommentLike(comment)"
-                >
-                  <span class="btn-icon">👍</span>
-                  <span class="btn-text">{{ isCommentLiked(comment.id) ? '已赞' : '点赞' }}</span>
-                </button>
+              <div class="comment-actions" v-if="isLoggedIn">
                 <button class="comment-reply-btn" @click="openReplyFor(comment.id)">回复</button>
               </div>
               <div v-if="replyOpenId===comment.id" class="reply-form">
@@ -114,13 +144,10 @@
               <div class="replies" v-if="childrenMap[comment.id] && childrenMap[comment.id].length">
                 <div v-for="rc in childrenMap[comment.id]" :key="rc.id" class="reply-item" :id="'comment-' + rc.id">
                   <div class="reply-header">
-                    <span class="reply-author">{{ rc.author }}</span>
-                    <span class="reply-date">{{ formatDate(rc.date) }}</span>
+                    <span class="reply-author">{{ rc.nickname || rc.username }}</span>
+                    <span class="reply-date">{{ formatDate(rc.created_at) }}</span>
                   </div>
                   <div class="reply-content">{{ rc.content }}</div>
-                  <div class="reply-actions">
-                    <button class="comment-like-btn" :class="{ active: isCommentLiked(rc.id) }" @click="onToggleCommentLike(rc)"><span class="btn-icon">👍</span><span class="btn-text">{{ isCommentLiked(rc.id) ? '已赞' : '点赞' }}</span></button>
-                  </div>
                 </div>
               </div>
             </div>
@@ -141,100 +168,204 @@
 </template>
 
 <script>
-// 统一从 Vuex 获取文章详情，移除静态数据依赖
-import { mapGetters, mapActions } from 'vuex'
+import axios from 'axios'
 
 export default {
   name: 'ArticleDetailPage',
   props: { id: String },
   data() {
     return {
+      article: null,
+      comments: [],
       newComment: '',
       replyOpenId: null,
-      replyText: ''
+      replyText: '',
+      loading: true,
+      error: null
     }
   },
   computed: {
-    ...mapGetters(['isLiked', 'isFavorited', 'getCommentsByArticle', 'isCommentLiked']),
-    article() {
-      const targetId = this.$route.params.id || this.id
-      const list = this.$store.state.articles && this.$store.state.articles.list || []
-      const found = list.find(a => String(a.id) === String(targetId))
-      return found || null
-    },
     articleId() {
-      return this.article ? this.article.id : null
+      return this.$route.params.id || this.id
+    },
+    isLoggedIn() {
+      return !!localStorage.getItem('authToken')
     },
     isLiked() {
-      return this.articleId ? this.$store.getters.isLiked(this.articleId) : false
+      return this.article ? this.article.user_liked : false
     },
     isFavorited() {
-      return this.articleId ? this.$store.getters.isFavorited(this.articleId) : false
+      return this.article ? this.article.user_favorited : false
     },
-    comments() {
-      return this.articleId ? this.$store.getters.getCommentsByArticle(this.articleId) : []
+    rootComments() { 
+      return this.comments.filter(c => !c.parent_id) 
     },
-    rootComments() { return this.comments.filter(c => !c.parentCommentId) },
     childrenMap() {
       const map = {}
       this.comments.forEach(c => {
-        if (!c.parentCommentId) return
-        if (!map[c.parentCommentId]) map[c.parentCommentId] = []
-        map[c.parentCommentId].push(c)
+        if (!c.parent_id) return
+        if (!map[c.parent_id]) map[c.parent_id] = []
+        map[c.parent_id].push(c)
       })
       return map
     }
   },
-  created() {
-    // 确保文章列表已加载（用户端/管理端统一从Vuex获取）
-    if (!this.$store.state.articles || (this.$store.state.articles.list || []).length === 0) {
-      this.$store.dispatch('articles/fetchArticles')
-    }
+  async created() {
+    await this.fetchArticleDetail()
+    await this.fetchComments()
   },
   methods: {
-    ...mapActions(['toggleLike', 'toggleFavorite', 'addComment', 'toggleCommentLike']),
+    async fetchArticleDetail() {
+      try {
+        this.loading = true
+        const token = localStorage.getItem('authToken')
+        const headers = token ? { Authorization: `Bearer ${token}` } : {}
+        
+        const response = await axios.get(`http://localhost:3001/api/articles/${this.articleId}`, { headers })
+        this.article = response.data.data
+        this.loading = false
+      } catch (error) {
+        console.error('获取文章详情失败:', error)
+        this.error = '获取文章详情失败'
+        this.loading = false
+      }
+    },
+    
+    async fetchComments() {
+      try {
+        const response = await axios.get(`http://localhost:3001/api/articles/${this.articleId}/comments`)
+        this.comments = response.data.data.comments
+      } catch (error) {
+        console.error('获取评论失败:', error)
+      }
+    },
+    
     formatDate(iso) {
       if (!iso) return ''
       const d = new Date(iso)
       const p = (n) => String(n).padStart(2, '0')
       return `${d.getFullYear()}年${p(d.getMonth()+1)}月${p(d.getDate())}日 ${p(d.getHours())}:${p(d.getMinutes())}`
     },
-    toggleLike() {
+    
+    async toggleLike() {
       if (!this.articleId) return
-      this.$store.dispatch('toggleLike', this.articleId)
+      
+      const token = localStorage.getItem('authToken')
+      if (!token) {
+        alert('请先登录')
+        return
+      }
+      
+      try {
+        const response = await axios.post(
+          `http://localhost:3001/api/articles/${this.articleId}/like`,
+          {},
+          { headers: { Authorization: `Bearer ${token}` } }
+        )
+        
+        if (response.data.success) {
+          // 重新获取文章详情以获取最新数据
+          await this.fetchArticleDetail()
+          alert(response.data.message)
+        }
+      } catch (error) {
+        console.error('点赞操作失败:', error)
+        alert('操作失败，请重试')
+      }
     },
-    toggleFavorite() {
+    
+    async toggleFavorite() {
       if (!this.articleId) return
-      this.$store.dispatch('toggleFavorite', this.articleId)
+      
+      const token = localStorage.getItem('authToken')
+      if (!token) {
+        alert('请先登录')
+        return
+      }
+      
+      try {
+        const response = await axios.post(
+          `http://localhost:3001/api/articles/${this.articleId}/favorite`,
+          {},
+          { headers: { Authorization: `Bearer ${token}` } }
+        )
+        
+        if (response.data.success) {
+          // 重新获取文章详情以获取最新数据
+          await this.fetchArticleDetail()
+          alert(response.data.message)
+        }
+      } catch (error) {
+        console.error('收藏操作失败:', error)
+        alert('操作失败，请重试')
+      }
     },
+    
     async submitComment() {
       if (!this.newComment.trim() || !this.articleId) return
       
+      const token = localStorage.getItem('authToken')
+      if (!token) {
+        alert('请先登录')
+        return
+      }
+      
       try {
-        await this.$store.dispatch('addComment', {
-          articleId: this.articleId,
-          content: this.newComment.trim()
-        })
-        this.newComment = ''
-        this.$message && this.$message.success('评论发表成功！')
+        const response = await axios.post(
+          `http://localhost:3001/api/articles/${this.articleId}/comments`,
+          { content: this.newComment.trim() },
+          { headers: { Authorization: `Bearer ${token}` } }
+        )
+        
+        if (response.data.success) {
+          // 重新获取文章详情和评论列表
+          await this.fetchArticleDetail()
+          await this.fetchComments()
+          this.newComment = ''
+          alert('评论发表成功！')
+        }
       } catch (error) {
         console.error('发表评论失败:', error)
         alert('评论发表失败，请重试')
       }
-    }
-    ,
-    onToggleCommentLike(comment) {
-      this.$store.dispatch('toggleCommentLike', {
-        commentId: comment.id,
-        articleId: this.articleId,
-        commentAuthor: comment.author
-      })
     },
-    openReplyFor(commentId) { this.replyOpenId = commentId; this.replyText = '' },
-    submitReply(parent) {
+    
+    async submitReply(parent) {
       if (!this.replyText.trim() || !this.articleId) return
-      this.$store.dispatch('addComment', { articleId: this.articleId, content: this.replyText.trim(), parentCommentId: parent.id, targetType: 'article', targetAuthor: parent.author })
-      this.replyText = ''; this.replyOpenId = null
+      
+      const token = localStorage.getItem('authToken')
+      if (!token) {
+        alert('请先登录')
+        return
+      }
+      
+      try {
+        const response = await axios.post(
+          `http://localhost:3001/api/articles/${this.articleId}/comments`,
+          { 
+            content: this.replyText.trim(),
+            parent_id: parent.id
+          },
+          { headers: { Authorization: `Bearer ${token}` } }
+        )
+        
+        if (response.data.success) {
+          // 重新获取文章详情和评论列表
+          await this.fetchArticleDetail()
+          await this.fetchComments()
+          this.replyText = ''
+          this.replyOpenId = null
+          alert('回复发表成功！')
+        }
+      } catch (error) {
+        console.error('发表回复失败:', error)
+        alert('回复发表失败，请重试')
+      }
+    },
+    
+    openReplyFor(commentId) { 
+      this.replyOpenId = commentId
+      this.replyText = '' 
     }
   },
   mounted() {
@@ -625,6 +756,190 @@ export default {
   color: #a0aec0;
   font-style: italic;
   padding: 40px 20px;
+}
+
+/* 加载状态 */
+.loading-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+  color: #4a5568;
+}
+
+.loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid #e2e8f0;
+  border-top: 4px solid #667eea;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 16px;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* 错误状态 */
+.error-container {
+  max-width: 600px;
+  margin: 80px auto;
+  text-align: center;
+  background: #ffffff;
+  border-radius: 16px;
+  padding: 60px 40px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+}
+
+.error-container h2 {
+  color: #e53e3e;
+  margin-bottom: 16px;
+  font-size: 1.8rem;
+}
+
+.error-container p {
+  color: #4a5568;
+  margin-bottom: 24px;
+  font-size: 1.1rem;
+}
+
+/* 未登录提示样式 */
+.login-prompt {
+  background: #ffffff;
+  border-radius: 16px;
+  padding: 24px;
+  margin-bottom: 24px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  text-align: center;
+}
+
+.prompt-content p {
+  color: #4a5568;
+  margin: 0 0 16px 0;
+  font-size: 16px;
+}
+
+.prompt-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+}
+
+.login-btn {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  text-decoration: none;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  border: none;
+  cursor: pointer;
+}
+
+.register-btn {
+  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  color: white;
+  text-decoration: none;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  border: none;
+  cursor: pointer;
+}
+
+.login-btn:hover,
+.register-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
+}
+
+.comment-login-prompt {
+  margin-bottom: 24px;
+  padding: 20px;
+  background: #f8fafc;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  text-align: center;
+}
+
+.comment-login-prompt p {
+  color: #4a5568;
+  margin: 0 0 12px 0;
+  font-size: 14px;
+}
+
+.comment-login-prompt .prompt-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+}
+
+.comment-login-prompt .btn {
+  padding: 8px 16px;
+  font-size: 12px;
+}
+
+/* 回复样式 */
+.reply-form {
+  margin-top: 12px;
+  padding: 16px;
+  background: #f8fafc;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+}
+
+.reply-item {
+  margin-top: 12px;
+  padding: 12px 16px;
+  background: #f1f5f9;
+  border-radius: 8px;
+  border-left: 3px solid #cbd5e0;
+}
+
+.reply-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.reply-author {
+  font-weight: 600;
+  color: #2d3748;
+  font-size: 13px;
+}
+
+.reply-date {
+  color: #718096;
+  font-size: 11px;
+}
+
+.reply-content {
+  color: #4a5568;
+  line-height: 1.5;
+  font-size: 13px;
+}
+
+.comment-reply-btn {
+  padding: 4px 12px;
+  background: #f7fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  cursor: pointer;
+  font-size: 12px;
+  color: #4a5568;
+  transition: all 0.2s ease;
+}
+
+.comment-reply-btn:hover {
+  background: #edf2f7;
+  border-color: #cbd5e0;
 }
 
 /* 响应式设计 */

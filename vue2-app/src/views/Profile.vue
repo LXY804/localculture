@@ -4,7 +4,12 @@
       <!-- 用户基本信息 -->
       <div class="user-info-card">
         <div class="user-avatar">
-          <img :src="userInfo.avatar" alt="用户头像" />
+          <img 
+            :src="userInfo.avatar" 
+            alt="用户头像" 
+            @error="handleAvatarError"
+            @load="handleAvatarLoad"
+          />
         </div>
         <div class="user-details">
           <h2 class="username">{{ userInfo.username }}</h2>
@@ -12,29 +17,33 @@
           <p class="join-date">注册时间: {{ userInfo.joinDate }}</p>
           <p class="user-role">角色: {{ userInfo.role === 'admin' ? '管理员' : '普通用户' }}</p>
         </div>
-        <button class="edit-btn" @click="openEditModal = true">编辑资料</button>
+        <button class="edit-btn" @click="openEditModalHandler">编辑资料</button>
       </div>
 
       <!-- 功能按钮区域 -->
       <div class="function-buttons">
-        <button class="func-btn" @click="showMyCollections">我的收藏 ({{ userCollections.length }})</button>
-        <button class="func-btn" @click="showMyPosts">我的帖子 ({{ userPosts.length }})</button>
-        <button class="func-btn" @click="showMyComments">我的评论 ({{ userComments.length }})</button>
-        <button class="func-btn" @click="showMyLikes">我的点赞 ({{ userLikes.length }})</button>
+        <button class="func-btn" @click="showMyCollections">我的收藏 ({{ myCollections.length }})</button>
+        <button class="func-btn" @click="showMyPosts">我的帖子 ({{ myPosts.length }})</button>
+        <button class="func-btn" @click="showMyComments">我的评论 ({{ myComments.length }})</button>
+        <button class="func-btn" @click="showMyLikes">我的点赞 ({{ myLikes.length }})</button>
+        <button class="func-btn" @click="showMyActivities">我的活动 ({{ myActivities.length }})</button>
         <button class="func-btn" @click="currentView = 'messages'">消息 ({{ notifications.length }})</button>
         <button class="func-btn" @click="currentView = 'settings'">消息设置</button>
-        <button class="func-btn" @click="currentView = 'account'">账号设置</button>
       </div>
 
       <!-- 内容展示区域 -->
       <div class="content-area">
+        <div v-if="loading" class="loading-state">
+          <p>加载中...</p>
+        </div>
+        
         <div v-if="currentView === 'collections'" class="content-section">
           <h3>我的收藏</h3>
-          <div v-if="userCollections.length === 0" class="empty-state">
+          <div v-if="myCollections.length === 0" class="empty-state">
             <p>暂无收藏内容</p>
           </div>
           <div v-else class="collection-list">
-            <div v-for="item in userCollections" :key="item.id" class="collection-item" @click="goToArticle(item.id)">
+            <div v-for="item in myCollections" :key="item.id" class="collection-item" @click="goToArticle(item.id)">
               <div class="collection-info">
                 <h4>{{ item.title }}</h4>
                 <p>{{ item.summary }}</p>
@@ -49,11 +58,11 @@
 
         <div v-if="currentView === 'posts'" class="content-section">
           <h3>我的帖子</h3>
-          <div v-if="userPosts.length === 0" class="empty-state">
+          <div v-if="myPosts.length === 0" class="empty-state">
             <p>暂无发布的帖子</p>
           </div>
           <div v-else class="post-list">
-            <div v-for="post in userPosts" :key="post.id" class="post-item" @click="goToArticle(post.id)">
+            <div v-for="post in myPosts" :key="post.id" class="post-item" @click="goToArticle(post.id)">
               <h4>{{ post.title }}</h4>
               <p>{{ post.summary }}</p>
               <div class="post-meta">
@@ -66,11 +75,11 @@
 
         <div v-if="currentView === 'comments'" class="content-section">
           <h3>我的评论</h3>
-          <div v-if="userComments.length === 0" class="empty-state">
+          <div v-if="myComments.length === 0" class="empty-state">
             <p>暂无评论记录</p>
           </div>
           <div v-else class="comment-list">
-            <div v-for="comment in userComments" :key="comment.id" class="comment-item" @click="goToComment(comment.articleId, comment.id)">
+            <div v-for="comment in myComments" :key="comment.id" class="comment-item" @click="goToComment(comment.articleId, comment.id)">
               <h4>{{ getArticleTitle(comment.articleId) }}</h4>
               <p class="comment-content">{{ comment.content }}</p>
               <div class="comment-meta">
@@ -82,17 +91,42 @@
 
         <div v-if="currentView === 'likes'" class="content-section">
           <h3>我的点赞</h3>
-          <div v-if="userLikes.length === 0" class="empty-state">
+          <div v-if="myLikes.length === 0" class="empty-state">
             <p>暂无点赞记录</p>
           </div>
           <div v-else class="like-list">
-            <div v-for="like in userLikes" :key="like.id" class="like-item" @click="goToArticle(like.id)">
+            <div v-for="like in myLikes" :key="like.id" class="like-item" @click="goToArticle(like.id)">
               <div class="like-info">
                 <h4>{{ like.title }}</h4>
                 <p>{{ like.summary }}</p>
                 <div class="like-meta">
                   <span class="like-author">作者：{{ like.author }}</span>
                   <span class="like-date">{{ formatDate(like.date) }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div v-if="currentView === 'activities'" class="content-section">
+          <h3>我的活动</h3>
+          <div v-if="myActivities.length === 0" class="empty-state">
+            <p>暂无报名活动</p>
+          </div>
+          <div v-else class="activity-list">
+            <div v-for="activity in myActivities" :key="activity.id" class="activity-item">
+              <div class="activity-icon">
+                <span v-if="activity.status === 'registered'">📅</span>
+                <span v-else-if="activity.status === 'completed'">✅</span>
+                <span v-else-if="activity.status === 'cancelled'">❌</span>
+                <span v-else>📋</span>
+              </div>
+              <div class="activity-content">
+                <h4>{{ activity.title }}</h4>
+                <p class="activity-description">{{ activity.location }}</p>
+                <div class="activity-meta">
+                  <span class="activity-status" :class="getStatusClass(activity.status)">{{ getStatusText(activity.status) }}</span>
+                  <span class="activity-date">{{ formatDate(activity.date) }}</span>
                 </div>
               </div>
             </div>
@@ -110,21 +144,6 @@
                 <span class="message-excerpt" v-if="n.excerpt">：{{ n.excerpt }}</span>
               </div>
               <div class="message-aside">{{ formatDate(n.date) }}</div>
-            </div>
-          </div>
-        </div>
-
-        <div v-if="currentView === 'activities'" class="content-section">
-          <h3>我的活动</h3>
-          <div v-if="myActivities.length === 0" class="empty-state">
-            <p>暂无参与的活动</p>
-          </div>
-          <div v-else class="activity-list">
-            <div v-for="activity in myActivities" :key="activity.id" class="activity-item">
-              <h4>{{ activity.title }}</h4>
-              <p>{{ activity.location }}</p>
-              <span class="activity-date">{{ activity.date }}</span>
-              <span class="activity-status" :class="activity.status">{{ getStatusText(activity.status) }}</span>
             </div>
           </div>
         </div>
@@ -211,9 +230,17 @@
           <div class="form-group">
             <label>头像</label>
             <div class="avatar-upload">
-              <img :src="editForm.avatar" alt="当前头像" class="current-avatar" />
+              <img 
+                :src="editForm.avatar" 
+                alt="当前头像" 
+                class="current-avatar"
+                @error="handleEditAvatarError"
+                @load="handleEditAvatarLoad"
+              />
               <input ref="avatarInput" type="file" class="avatar-input" accept="image/*" @change="handleAvatarChange" />
-              <button type="button" class="upload-btn" @click="triggerAvatarUpload">选择头像</button>
+              <button type="button" class="upload-btn" @click="triggerAvatarUpload" :disabled="uploading">
+                {{ uploading ? '上传中...' : '选择头像' }}
+              </button>
             </div>
           </div>
           <div class="form-group">
@@ -228,6 +255,46 @@
             <label>个人简介</label>
             <textarea v-model="editForm.bio" rows="3"></textarea>
           </div>
+          
+          <!-- 修改密码模块 -->
+          <div class="form-group">
+            <label>修改密码</label>
+            <div class="password-section">
+              <div class="password-input-group">
+                <input 
+                  v-model="passwordForm.oldPassword" 
+                  type="password" 
+                  placeholder="请输入原密码"
+                  class="password-input"
+                />
+              </div>
+              <div class="password-input-group">
+                <input 
+                  v-model="passwordForm.newPassword" 
+                  type="password" 
+                  placeholder="请输入新密码"
+                  class="password-input"
+                />
+              </div>
+              <div class="password-input-group">
+                <input 
+                  v-model="passwordForm.confirmPassword" 
+                  type="password" 
+                  placeholder="请确认新密码"
+                  class="password-input"
+                />
+              </div>
+              <button 
+                type="button" 
+                class="change-password-btn" 
+                @click="changePassword"
+                :disabled="changingPassword"
+              >
+                {{ changingPassword ? '修改中...' : '修改密码' }}
+              </button>
+            </div>
+          </div>
+          
           <div class="form-actions">
             <button type="button" @click="openEditModal = false">取消</button>
             <button type="submit">保存</button>
@@ -240,6 +307,10 @@
 
 <script>
 import { mapGetters } from 'vuex'
+import { uploadAvatar } from '@/api/upload'
+import { updateProfile, changePassword } from '@/api/users'
+import { getUserProfile, getUserFavorites, getUserLikes, getUserComments, getUserPosts } from '@/api/userCenter'
+import { getUserActivities } from '@/api/activities'
 // 统一数据源后，不再直接引入静态文章数据
 
 export default {
@@ -248,87 +319,33 @@ export default {
     return {
       currentView: 'collections',
       openEditModal: false,
-      userInfo: {
-        id: 'u-123456',
-        username: '文化爱好者',
-        avatar: 'https://via.placeholder.com/80x80?text=Avatar',
-        joinDate: '2023-01-15',
-        role: 'user'
-      },
+      uploading: false,
+      loading: false,
       editForm: {
-        avatar: 'https://via.placeholder.com/80x80?text=Avatar',
-        nickname: '文化爱好者',
-        email: 'user@example.com',
-        bio: '热爱传统文化，喜欢分享和交流'
+        avatar: '',
+        nickname: '',
+        email: '',
+        bio: ''
       },
+      passwordForm: {
+        oldPassword: '',
+        newPassword: '',
+        confirmPassword: ''
+      },
+      changingPassword: false,
       messageSettings: {
         systemNotification: true,
         activityReminder: true,
         commentReply: false,
         privateMessage: true
       },
-      myCollections: [
-        {
-          id: 'c1',
-          title: '探秘古老茶艺：潮汕工夫茶的独特魅力',
-          summary: '潮汕工夫茶是中国茶道中的一朵奇葩...',
-          image: 'https://via.placeholder.com/60x40?text=Tea',
-          collectDate: '2023-10-20'
-        },
-        {
-          id: 'c2',
-          title: '传统手工艺的魅力',
-          summary: '你了解哪些濒临失传的手工艺？',
-          image: 'https://via.placeholder.com/60x40?text=Craft',
-          collectDate: '2023-10-18'
-        }
-      ],
-      myPosts: [
-        {
-          id: 'p1',
-          title: '地方美食文化探讨',
-          summary: '分享你家乡的特色美食！',
-          tags: ['美食'],
-          date: '2023-10-25'
-        },
-        {
-          id: 'p2',
-          title: '传统手工艺的魅力',
-          summary: '你了解哪些濒临失传的手工艺？',
-          tags: ['手工'],
-          date: '2023-10-24'
-        }
-      ],
-      myComments: [
-        {
-          id: 'cmt1',
-          targetTitle: '探秘古老茶艺：潮汕工夫茶的独特魅力',
-          content: '这篇文章写得很好，学到了很多茶艺知识！',
-          date: '2023-10-22'
-        },
-        {
-          id: 'cmt2',
-          targetTitle: '地方美食文化探讨',
-          content: '我们家乡的火锅很有特色，推荐大家试试。',
-          date: '2023-10-21'
-        }
-      ],
-      myActivities: [
-        {
-          id: 'act1',
-          title: '传统文化节开幕',
-          location: '文化广场',
-          date: '2023-11-01',
-          status: 'registered'
-        },
-        {
-          id: 'act2',
-          title: '非遗手作体验',
-          location: '手作工坊',
-          date: '2023-11-05',
-          status: 'completed'
-        }
-      ],
+      // 从API获取的真实数据
+      userProfile: null,
+      myCollections: [],
+      myPosts: [],
+      myComments: [],
+      myLikes: [],
+        myActivities: [],
       account: {
         security: { passwordSet: false },
         mobile: '182****9635',
@@ -339,28 +356,124 @@ export default {
   },
   computed: {
     ...mapGetters(['userActivities', 'username', 'notifications']),
-    userCollections() {
-      const list = (this.$store.state.articles && this.$store.state.articles.list) || []
-      return this.userActivities.favorites.map(articleId => {
-        const article = list.find(a => String(a.id) === String(articleId))
-        return article ? { ...article, collectDate: new Date().toISOString() } : null
-      }).filter(Boolean)
-    },
-    userPosts() {
-      const list = (this.$store.state.articles && this.$store.state.articles.list) || []
-      return list.filter(article => article.author === this.username)
-    },
-    userComments() {
-      return this.userActivities.comments
-    },
-    userLikes() {
-      const list = (this.$store.state.articles && this.$store.state.articles.list) || []
-      return this.userActivities.likes.map(articleId => {
-        return list.find(a => String(a.id) === String(articleId))
-      }).filter(Boolean)
+    userInfo() {
+      const profile = this.userProfile
+      if (!profile) {
+        return {
+          id: '',
+          username: '未登录',
+          avatar: 'https://via.placeholder.com/80x80?text=Avatar',
+          joinDate: '',
+          role: 'guest'
+        }
+      }
+      
+      return {
+        id: profile.id || 'u-' + Date.now(),
+        username: profile.nickname || profile.username || '用户',
+        avatar: this.getAvatarUrl(profile.avatar),
+        joinDate: profile.created_at ? new Date(profile.created_at).toLocaleDateString() : '未知',
+        role: profile.role || 'user'
+      }
     }
   },
+  async mounted() {
+    await this.loadUserData()
+    this.initEditForm()
+  },
   methods: {
+    // 加载用户数据
+    async loadUserData() {
+      try {
+        this.loading = true
+        
+        // 检查是否已登录
+        const token = localStorage.getItem('authToken')
+        if (!token) {
+          console.log('用户未登录')
+          return
+        }
+        
+          // 并行加载所有用户数据
+          const [profileRes, favoritesRes, likesRes, commentsRes, postsRes, activitiesRes] = await Promise.all([
+            getUserProfile().catch(err => ({ data: { success: false, error: err.message } })),
+            getUserFavorites().catch(err => ({ data: { success: false, error: err.message } })),
+            getUserLikes().catch(err => ({ data: { success: false, error: err.message } })),
+            getUserComments().catch(err => ({ data: { success: false, error: err.message } })),
+            getUserPosts().catch(err => ({ data: { success: false, error: err.message } })),
+            getUserActivities().catch(err => ({ data: { success: false, error: err.message } }))
+          ])
+        
+        // 处理用户信息
+        if (profileRes.data.success) {
+          this.userProfile = profileRes.data.data
+        }
+        
+        // 处理收藏数据
+        if (favoritesRes.data.success) {
+          this.myCollections = favoritesRes.data.data.favorites.map(item => ({
+            id: item.id,
+            title: item.title,
+            summary: item.content ? item.content.substring(0, 100) + '...' : '暂无摘要',
+            author: '系统',
+            date: item.favorited_at || item.created_at
+          }))
+        }
+        
+        // 处理点赞数据
+        if (likesRes.data.success) {
+          this.myLikes = likesRes.data.data.likes.map(item => ({
+            id: item.id,
+            title: item.title,
+            summary: item.content ? item.content.substring(0, 100) + '...' : '暂无摘要',
+            author: '系统',
+            date: item.liked_at || item.created_at
+          }))
+        }
+        
+        // 处理评论数据
+        if (commentsRes.data.success) {
+          this.myComments = commentsRes.data.data.comments.map(item => ({
+            id: item.id,
+            articleId: item.article_id,
+            content: item.content,
+            date: item.created_at
+          }))
+        }
+        
+        // 处理帖子数据
+        if (postsRes.data.success) {
+          this.myPosts = postsRes.data.data.posts.map(item => ({
+            id: item.id,
+            title: item.title,
+            summary: item.content ? item.content.substring(0, 100) + '...' : '暂无摘要',
+            tags: [item.category || '未分类'],
+            date: item.created_at
+          }))
+        }
+        
+        // 处理活动数据
+        if (activitiesRes.data.success) {
+          this.myActivities = activitiesRes.data.data.activities.map(item => ({
+            id: item.activity_id,
+            title: item.title,
+            location: item.location,
+            date: item.start_time,
+            status: item.registration_status,
+            registration_time: item.registration_time,
+            description: item.description,
+            end_time: item.end_time,
+            cover: item.cover
+          }))
+        }
+        
+      } catch (error) {
+        console.error('加载用户数据失败:', error)
+      } finally {
+        this.loading = false
+      }
+    },
+    
     showMyCollections() {
       this.currentView = 'collections'
     },
@@ -375,7 +488,48 @@ export default {
     },
     showMyActivities() {
       this.currentView = 'activities'
+      // 刷新活动数据
+      this.refreshActivities()
     },
+    getStatusText(status) {
+      const statusMap = {
+        'registered': '已报名',
+        'completed': '已完成',
+        'cancelled': '已取消',
+        'pending': '待确认'
+      }
+      return statusMap[status] || '未知状态'
+    },
+    getStatusClass(status) {
+      const classMap = {
+        'registered': 'status-registered',
+        'completed': 'status-completed',
+        'cancelled': 'status-cancelled',
+        'pending': 'status-pending'
+      }
+      return classMap[status] || 'status-unknown'
+    },
+      async refreshActivities() {
+        // 从数据库重新加载活动数据
+        try {
+          const response = await getUserActivities()
+          if (response.data.success) {
+            this.myActivities = response.data.data.activities.map(item => ({
+              id: item.activity_id,
+              title: item.title,
+              location: item.location,
+              date: item.start_time,
+              status: item.registration_status,
+              registration_time: item.registration_time,
+              description: item.description,
+              end_time: item.end_time,
+              cover: item.cover
+            }))
+          }
+        } catch (error) {
+          console.error('刷新活动数据失败:', error)
+        }
+      },
     formatDate(iso) {
       if (!iso) return ''
       const d = new Date(iso)
@@ -383,9 +537,9 @@ export default {
       return `${d.getFullYear()}年${p(d.getMonth()+1)}月${p(d.getDate())}日 ${p(d.getHours())}:${p(d.getMinutes())}`
     },
     getArticleTitle(articleId) {
-      const list = (this.$store.state.articles && this.$store.state.articles.list) || []
-      const article = list.find(a => String(a.id) === String(articleId))
-      return article ? article.title : '未知文章'
+      // 从评论数据中查找文章标题
+      const comment = this.myComments.find(c => c.articleId === articleId)
+      return comment ? `文章ID: ${articleId}` : '未知文章'
     },
     goToArticle(articleId) {
       this.$router.push({ name: 'article-detail', params: { id: articleId } })
@@ -404,20 +558,38 @@ export default {
         this.$router.push({ name: 'article-detail', params: { id: n.articleId }, query: { highlight: n.commentId } })
       }
     },
-    getStatusText(status) {
-      const statusMap = {
-        'registered': '已报名',
-        'completed': '已完成',
-        'cancelled': '已取消'
+    getAvatarUrl(avatar) {
+      if (!avatar) {
+        return 'https://via.placeholder.com/80x80?text=Avatar'
       }
-      return statusMap[status] || status
+      
+      // 如果已经是完整URL，直接返回
+      if (avatar.startsWith('http://') || avatar.startsWith('https://')) {
+        return avatar
+      }
+      
+      // 如果是相对路径，添加服务器地址
+      if (avatar.startsWith('/uploads/')) {
+        return `http://localhost:3001${avatar}`
+      }
+      
+      // 默认情况
+      return avatar
     },
-    saveProfile() {
-      // 保存用户资料
-      this.userInfo.username = this.editForm.nickname
-      this.userInfo.avatar = this.editForm.avatar
-      alert('资料保存成功！')
-      this.openEditModal = false
+    initEditForm() {
+      const profile = this.userProfile
+      if (profile) {
+        this.editForm = {
+          avatar: this.getAvatarUrl(profile.avatar),
+          nickname: profile.nickname || profile.username || '',
+          email: profile.email || '',
+          bio: profile.bio || ''
+        }
+      }
+    },
+    openEditModalHandler() {
+      this.initEditForm()
+      this.openEditModal = true
     },
     // 账号设置相关交互（示意）
     onSetPassword() { alert('进入设置/修改密码流程（示意）') },
@@ -428,14 +600,128 @@ export default {
     onCloseAccount() { if (confirm('确定要注销账号吗？')) alert('已提交注销申请（示意）') },
     maskPhone(v){ return v || '未绑定' },
     triggerAvatarUpload() { this.$refs.avatarInput && this.$refs.avatarInput.click() },
-    handleAvatarChange(e) {
+    handleAvatarError(event) {
+      console.error('头像加载失败:', event.target.src)
+      // 设置默认头像
+      event.target.src = 'https://via.placeholder.com/80x80?text=Avatar'
+    },
+    handleAvatarLoad(event) {
+      console.log('头像加载成功:', event.target.src)
+    },
+    handleEditAvatarError(event) {
+      console.error('编辑表单头像加载失败:', event.target.src)
+      // 设置默认头像
+      event.target.src = 'https://via.placeholder.com/80x80?text=Avatar'
+    },
+    handleEditAvatarLoad(event) {
+      console.log('编辑表单头像加载成功:', event.target.src)
+    },
+    async handleAvatarChange(e) {
       const file = e && e.target && e.target.files && e.target.files[0]
       if (!file) return
-      const reader = new FileReader()
-      reader.onload = (ev) => {
-        this.editForm.avatar = ev.target && ev.target.result || this.editForm.avatar
+      
+      // 验证文件类型
+      if (!file.type.startsWith('image/')) {
+        alert('请选择图片文件')
+        return
       }
-      reader.readAsDataURL(file)
+      
+      // 验证文件大小 (5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        alert('图片大小不能超过5MB')
+        return
+      }
+      
+      try {
+        // 显示上传中状态
+        this.uploading = true
+        
+        // 上传头像到服务器
+        const response = await uploadAvatar(file)
+        
+        if (response.data.success) {
+          // 更新编辑表单中的头像URL，确保是完整URL
+          const avatarUrl = this.getAvatarUrl(response.data.avatarUrl)
+          this.editForm.avatar = avatarUrl
+          console.log('头像上传成功，URL:', avatarUrl)
+          alert('头像上传成功！')
+        } else {
+          alert('头像上传失败：' + response.data.message)
+        }
+      } catch (error) {
+        console.error('头像上传失败:', error)
+        alert('头像上传失败，请重试')
+      } finally {
+        this.uploading = false
+      }
+    },
+    async saveProfile() {
+      try {
+        // 调用API更新用户信息
+        const response = await updateProfile({
+          nickname: this.editForm.nickname,
+          email: this.editForm.email,
+          avatar: this.editForm.avatar
+        })
+        
+        if (response.data.success) {
+          // 更新Vuex中的用户信息
+          this.$store.commit('SET_USER_PROFILE', response.data.user)
+          console.log('用户资料更新成功:', response.data.user)
+          alert('资料保存成功！')
+          this.openEditModal = false
+        } else {
+          alert('保存失败：' + response.data.message)
+        }
+      } catch (error) {
+        console.error('保存用户信息失败:', error)
+        alert('保存失败，请重试')
+      }
+    },
+    async changePassword() {
+      // 验证输入
+      if (!this.passwordForm.oldPassword) {
+        alert('请输入原密码')
+        return
+      }
+      if (!this.passwordForm.newPassword) {
+        alert('请输入新密码')
+        return
+      }
+      if (this.passwordForm.newPassword !== this.passwordForm.confirmPassword) {
+        alert('两次输入的新密码不一致')
+        return
+      }
+      if (this.passwordForm.newPassword.length < 6) {
+        alert('新密码长度不能少于6位')
+        return
+      }
+      
+      try {
+        this.changingPassword = true
+        
+        const response = await changePassword({
+          oldPassword: this.passwordForm.oldPassword,
+          newPassword: this.passwordForm.newPassword
+        })
+        
+        if (response.data.success) {
+          alert('密码修改成功！')
+          // 清空密码表单
+          this.passwordForm = {
+            oldPassword: '',
+            newPassword: '',
+            confirmPassword: ''
+          }
+        } else {
+          alert('密码修改失败：' + response.data.message)
+        }
+      } catch (error) {
+        console.error('修改密码失败:', error)
+        alert('密码修改失败：' + (error.response?.data?.message || error.message || '未知错误'))
+      } finally {
+        this.changingPassword = false
+      }
     }
   }
 }
@@ -553,6 +839,13 @@ export default {
   text-align: center;
   color: #909399;
   padding: 40px;
+}
+
+.loading-state {
+  text-align: center;
+  color: #42b983;
+  padding: 40px;
+  font-size: 16px;
 }
 
 /* 收藏列表 */
@@ -766,22 +1059,87 @@ export default {
 
 .activity-item {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
+  gap: 12px;
   padding: 16px;
   border: 1px solid #f0f0f0;
   border-radius: 8px;
+  transition: all 0.2s ease;
 }
 
-.activity-item h4 {
-  margin: 0;
+.activity-item:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  transform: translateY(-2px);
+  border-color: #409eff;
+}
+
+.activity-icon {
+  font-size: 20px;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f8f9fa;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.activity-content {
+  flex: 1;
+}
+
+.activity-content h4 {
+  margin: 0 0 4px 0;
   color: #2c3e50;
+  font-size: 14px;
+  font-weight: 600;
 }
 
-.activity-item p {
-  margin: 4px 0;
+.activity-description {
+  margin: 0 0 8px 0;
   color: #606266;
-  font-size: 14px;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.activity-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.activity-status {
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.status-registered {
+  background: #e1f3d8;
+  color: #67c23a;
+}
+
+.status-completed {
+  background: #d4edda;
+  color: #155724;
+}
+
+.status-cancelled {
+  background: #f8d7da;
+  color: #721c24;
+}
+
+.status-pending {
+  background: #fff3cd;
+  color: #856404;
+}
+
+.status-unknown {
+  background: #e2e3e5;
+  color: #6c757d;
 }
 
 .activity-date {
@@ -985,6 +1343,53 @@ input:checked + .slider:before {
 .avatar-input { display: none; }
 .upload-btn { background: #f5f7fa; border: 1px solid #dcdfe6; color: #606266; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-size: 14px; transition: all 0.2s ease; }
 .upload-btn:hover { background: #e6e9ef; border-color: #42b983; color: #42b983; }
+
+/* 修改密码样式 */
+.password-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.password-input-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.password-input {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #dcdfe6;
+  border-radius: 4px;
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.2s ease;
+}
+
+.password-input:focus {
+  border-color: #42b983;
+}
+
+.change-password-btn {
+  background: #42b983;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background-color 0.2s ease;
+  align-self: flex-start;
+}
+
+.change-password-btn:hover:not(:disabled) {
+  background: #369f72;
+}
+
+.change-password-btn:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+}
 
 /* 账号设置样式 */
 .account-list { display: flex; flex-direction: column; }

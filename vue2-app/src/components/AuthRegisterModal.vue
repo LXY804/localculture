@@ -4,9 +4,9 @@
       <h3>注册</h3>
     </div>
     <form class="form" @submit.prevent="onSubmit">
+      <input v-model="nickname" placeholder="昵称" class="form-input" required />
       <input v-model="phone" placeholder="手机号" class="form-input" />
-      <input v-model="nickname" placeholder="昵称" class="form-input" />
-      <input v-model="password" type="password" placeholder="密码" class="form-input" />
+      <input v-model="password" type="password" placeholder="密码" class="form-input" required />
       <div class="verification-section">
         <button type="button" class="get-code-btn" @click="getVerificationCode">获取验证码</button>
         <input v-model="verificationCode" placeholder="验证码" class="verification-input" />
@@ -25,22 +25,29 @@ export default {
   components: { BaseModal },
   data() {
     return { 
-      phone: '', 
       nickname: '',
+      phone: '', 
       password: '',
       verificationCode: ''
     }
   },
   methods: {
     async onSubmit() {
-      await this.$store.dispatch('registerWithPhone', { 
-        phone: this.phone, 
-        password: this.password,
-        nickname: this.nickname,
-        verificationCode: this.verificationCode
-      })
-      this.$emit('close')
-      this.$emit('after-register')
+      try {
+        await this.$store.dispatch('registerWithPhone', { 
+          username: this.nickname, // 使用昵称作为用户名
+          nickname: this.nickname,
+          phone: this.phone, 
+          password: this.password,
+          verificationCode: this.verificationCode
+        })
+        this.$emit('close')
+        this.$emit('after-register')
+        alert('注册成功！')
+      } catch (error) {
+        console.error('注册失败:', error)
+        alert('注册失败：' + (error.message || '未知错误'))
+      }
     },
     getVerificationCode() {
       if (!this.phone) {

@@ -103,10 +103,10 @@ html, body { margin: 0; padding: 0; }
 .nav {
   display: flex;
   gap: 6px;
-  padding: 8px 10px;
+  padding: 13px 10px;
   background: linear-gradient(0deg, #f7f9fc 0%, #ffffff 100%);
   border-bottom: 1px solid #e6e9ef;
-  font-size: 15px;
+  font-size: 18px;
 /*  transform: scale(0.5);*/
   transform-origin: left center;
   align-items: center; /* 垂直居中，使品牌与首页同高 */
@@ -116,7 +116,7 @@ html, body { margin: 0; padding: 0; }
 .brand { font-weight: 100; margin-right: 60px; display: inline-flex; align-items: center; height: 20px; letter-spacing: 0.5px; color: #2b3640; }
 .nav a {
   text-decoration: none;
-  font-size: 15px;
+  font-size: 18px;
   display: inline-flex; align-items: center; height: 20px; /* 与品牌同高 */
   color: #2c3e50;
 }
@@ -138,18 +138,18 @@ html, body { margin: 0; padding: 0; }
 .admin-link { position: absolute; left: calc(50% + 200px + 200px + 40px); top: 50%; transform: translateY(-50%); margin-left: 0; }
 .profile-link { position: absolute; left: calc(50% + 200px + 200px + 130px); top: 50%; transform: translateY(-50%); margin-left: 0; }
 .auth-group { display: inline-flex; gap: 6px; transform: translateX(-60px); }
-.search-field { position: relative; display: inline-block; }
-.search input { width: 390px; height: 20px; padding: 2px 28px 2px 6px; font-size: 15px; border: 1px solid #dcdfe6; border-radius: 4px; background: #fff; transition: box-shadow 120ms ease, border-color 120ms ease; }
-.search-btn { position: absolute; right: 2px; top: 50%; transform: translateY(-50%); height: 20px; padding: 0 8px; font-size: 15px; border: none; border-radius: 3px; background: transparent; color: #666; cursor: pointer; transition: background-color 120ms ease, box-shadow 120ms ease, color 120ms ease; }
+.search-field { position: relative; display: inline-flex; align-items: center; height: 25px; }
+.search input { width: 392px; height: 25px; padding: 2px 28px 2px 6px; font-size: 17px; line-height: 21px; border: 1px solid #dcdfe6; border-radius: 4px; background: #fff; transition: box-shadow 120ms ease, border-color 120ms ease; }
+.search-btn { position: absolute; right: 2px; top: 0; bottom: 0; transform: none; height: 25px; line-height: 25px; padding: 0 8px; font-size: 17px; border: none; border-radius: 3px; background: transparent; color: #666; cursor: pointer; transition: background-color 120ms ease, box-shadow 120ms ease, color 120ms ease; }
 .search input:focus { outline: none; border-color: #42b983; box-shadow: 0 0 0 2px rgba(66,185,131,0.15); }
 .search-btn:hover { background: #eaeaea; }
 .search-btn:active { background: #dcdcdc; }
 .search-btn:focus-visible { outline: none; box-shadow: 0 0 0 2px rgba(66,185,131,0.25); }
 .linklike {
   background: none; border: none; color: #42b983; cursor: pointer; padding: 0;
-  transition: color 120ms ease;
+  transition: color 120ms ease; font-size: 18px;
 }
 .linklike:hover { color: #2ba06d; }
-.logout-btn { transform: translateX(-50px); }
+.logout-btn { transform: translateX(-50px); font-size: 18px; }
 .spacer { flex: 1; }
 </style>
