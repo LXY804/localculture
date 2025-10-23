@@ -5,13 +5,25 @@
   "scripts": {
     "serve": "vue-cli-service serve",
     "build": "vue-cli-service build",
-    "lint": "vue-cli-service lint"
+    "lint": "vue-cli-service lint",
+    "server": "node server/index.js",
+    "start": "npm run dev",
+    "dev": "concurrently \"npm run server\" \"npm run serve\"",
+    "start:backend": "cd server && node index.js",
+    "start:frontend": "npm run serve"
   },
   "dependencies": {
     "axios": "^1.12.2",
+    "bcryptjs": "^3.0.2",
     "core-js": "^3.6.5",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
     "echarts": "^6.0.0",
     "element-ui": "^2.15.14",
+    "express": "^5.1.0",
+    "jsonwebtoken": "^9.0.2",
+    "multer": "^2.0.2",
+    "mysql2": "^3.15.2",
     "vue": "^2.6.11",
     "vue-quill-editor": "^3.0.6",
     "vue-router": "^3.6.5",
@@ -22,6 +34,7 @@
     "@vue/cli-plugin-eslint": "~4.5.19",
     "@vue/cli-service": "~4.5.19",
     "babel-eslint": "^10.1.0",
+    "concurrently": "^7.6.0",
     "eslint": "^6.7.2",
     "eslint-plugin-vue": "^6.2.2",
     "vue-template-compiler": "^2.6.11"
