@@ -13,7 +13,7 @@ USE `localculture`;
 CREATE TABLE IF NOT EXISTS `users` (
   `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   `username` VARCHAR(50) NOT NULL UNIQUE,
-  `nickname` VARCHAR(50),
+  `nickname` VARCHAR(1000),
   `email` VARCHAR(100),
   `phone` VARCHAR(20) UNIQUE,
   `password` VARCHAR(255),
@@ -80,6 +80,7 @@ CREATE TABLE IF NOT EXISTS `activities` (
   `status` ENUM('draft','published','cancelled') DEFAULT 'published',
   `visible` TINYINT(1) DEFAULT 1,
   `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
@@ -91,6 +92,8 @@ CREATE TABLE IF NOT EXISTS `user_activities` (
   `status` ENUM('registered','cancelled','attended') DEFAULT 'registered',
   `registration_time` DATETIME DEFAULT CURRENT_TIMESTAMP,
   `notes` TEXT,
+  `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE,
   FOREIGN KEY (`activity_id`) REFERENCES `activities`(`id`) ON DELETE CASCADE,
@@ -106,6 +109,7 @@ CREATE TABLE IF NOT EXISTS `article_comments` (
   `parent_id` BIGINT UNSIGNED DEFAULT NULL,
   `status` ENUM('active','hidden','deleted') DEFAULT 'active',
   `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   FOREIGN KEY (`article_id`) REFERENCES `articles`(`id`) ON DELETE CASCADE,
   FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE,
@@ -153,6 +157,7 @@ CREATE TABLE IF NOT EXISTS `hotarticles` (
   `sort_order` INT DEFAULT 0,
   `status` ENUM('active','inactive') DEFAULT 'active',
   `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   FOREIGN KEY (`article_id`) REFERENCES `articles`(`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
