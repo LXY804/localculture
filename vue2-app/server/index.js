@@ -315,8 +315,28 @@ app.post('/api/hot-articles/init', async (req, res) => {
 // 获取文章列表
 app.get('/api/articles', async (req, res) => {
   try {
-    // 优先从数据库读取；若库表不存在则回退到 mock
-    const [rows] = await pool.query('SELECT id, title, content, category, status, visible, cover, views, likes FROM articles ORDER BY id DESC LIMIT 200')
+    // 现在 articles 表已包含完整数据，直接查询即可
+    // 使用 LEFT JOIN 标记是否为热门文章，热门文章排在前面
+    const [rows] = await pool.query(`
+      SELECT 
+        a.id,
+        a.title,
+        a.content,
+        a.summary,
+        a.category,
+        a.status,
+        a.visible,
+        a.cover,
+        a.views,
+        a.likes,
+        a.created_at,
+        CASE WHEN h.id IS NOT NULL THEN 1 ELSE 0 END as is_hot
+      FROM articles a
+      LEFT JOIN hotarticles h ON a.id = h.article_id AND h.status = 'active'
+      ORDER BY is_hot DESC, a.id DESC
+      LIMIT 200
+    `)
+    
     if (rows && rows.length) {
       const role = req.query.role || 'user'
       let list = rows
@@ -324,6 +344,7 @@ app.get('/api/articles', async (req, res) => {
       return res.json(list)
     }
   } catch (e) {
+    console.error('获取文章列表失败:', e)
     // fallback to mock
   }
   try {
@@ -342,60 +363,20 @@ app.get('/api/articles/:id', async (req, res) => {
   try {
     const { id } = req.params
     
-    // 先检查是否是热门文章
-    const [hotRows] = await pool.query(
-      'SELECT * FROM hotarticles WHERE article_id = ? AND status = ?',
-      [id, 'active']
+    // 先增加浏览量
+    await pool.query('UPDATE articles SET views = views + 1 WHERE id = ?', [id])
+    
+    // 获取文章详情（现在 articles 表已包含完整数据）
+    const [rows] = await pool.query(
+      'SELECT id, title, content, summary, category, status, visible, cover, views, likes, created_at, updated_at FROM articles WHERE id = ?',
+      [id]
     )
     
-    
-    let article = null
-    let isHotArticle = false
-    
-    if (hotRows.length > 0) {
-      // 是热门文章，从hotarticles表获取数据
-      isHotArticle = true
-      const hotArticle = hotRows[0]
-      
-      // 增加热门文章的浏览量
-      await pool.query('UPDATE hotarticles SET views = views + 1 WHERE article_id = ?', [id])
-      
-      // 获取更新后的数据
-      const [updatedHotRows] = await pool.query(
-        'SELECT * FROM hotarticles WHERE article_id = ? AND status = ?',
-        [id, 'active']
-      )
-      
-      article = {
-        id: updatedHotRows[0].article_id,
-        title: updatedHotRows[0].title,
-        content: updatedHotRows[0].summary, // 使用summary作为content
-        category: updatedHotRows[0].category,
-        status: 'published',
-        visible: 1,
-        cover: updatedHotRows[0].cover,
-        views: updatedHotRows[0].views,
-        likes: updatedHotRows[0].likes,
-        created_at: updatedHotRows[0].created_at,
-        updated_at: updatedHotRows[0].created_at
-      }
-    } else {
-      // 普通文章，从articles表获取数据
-      // 先增加浏览量
-      await pool.query('UPDATE articles SET views = views + 1 WHERE id = ?', [id])
-      
-      // 获取文章详情
-      const [rows] = await pool.query(
-        'SELECT id, title, content, category, status, visible, cover, views, likes, created_at, updated_at FROM articles WHERE id = ?',
-        [id]
-      )
-      
-      if (rows.length === 0) {
-        return res.status(404).json({ message: '文章不存在' })
-      }
-      
-      article = rows[0]
+    if (rows.length === 0) {
+      return res.status(404).json({ message: '文章不存在' })
     }
+    
+    const article = rows[0]
     
     // 获取评论数量
     const [commentCount] = await pool.query(
