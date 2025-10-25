@@ -28,29 +28,37 @@
         <header class="article-header">
           <h1 class="article-title">{{ article.title }}</h1>
           
-          <!-- 文章元信息 -->
-          <div class="article-meta">
-            <div class="meta-item">
-              <span class="meta-label">分类：</span>
-              <span class="meta-value">{{ article.category || '未分类' }}</span>
-            </div>
-            <div class="meta-item">
-              <span class="meta-label">发布时间：</span>
-              <span class="meta-value">{{ formatDate(article.created_at) }}</span>
-            </div>
-            <div class="meta-item">
-              <span class="meta-label">浏览量：</span>
-              <span class="meta-value">{{ article.views }}</span>
-            </div>
-            <div class="meta-item">
-              <span class="meta-label">点赞数：</span>
-              <span class="meta-value">{{ article.likes }}</span>
-            </div>
-            <div class="meta-item">
-              <span class="meta-label">评论数：</span>
-              <span class="meta-value">{{ article.comments_count }}</span>
-            </div>
+        <!-- 文章元信息 -->
+        <div class="article-meta">
+          <div class="meta-item">
+            <span class="meta-label">分类：</span>
+            <span class="meta-value">{{ article.category || '未分类' }}</span>
           </div>
+          <div class="meta-item">
+            <span class="meta-label">发布时间：</span>
+            <span class="meta-value">{{ formatDate(article.created_at) }}</span>
+          </div>
+          <div class="meta-item">
+            <span class="meta-label">浏览量：</span>
+            <span class="meta-value">{{ article.views }}</span>
+          </div>
+          <div class="meta-item">
+            <span class="meta-label">点赞数：</span>
+            <span class="meta-value">{{ article.likes }}</span>
+          </div>
+          <div class="meta-item">
+            <span class="meta-label">评论数：</span>
+            <span class="meta-value">{{ article.comments_count }}</span>
+          </div>
+        </div>
+
+        <!-- 文章操作按钮（只有作者可见） -->
+        <div v-if="canDeleteArticle" class="article-actions">
+          <button class="delete-article-btn" @click="deleteArticle">
+            <span class="btn-icon">🗑️</span>
+            删除文章
+          </button>
+        </div>
         </header>
 
         <!-- 文章正文 -->
@@ -257,6 +265,19 @@ export default {
         map[c.parent_id].push(c)
       })
       return map
+    },
+    canDeleteArticle() {
+      if (!this.isLoggedIn || !this.article) return false
+      
+      // 获取当前用户信息
+      const currentUser = this.$store.state.userProfile
+      if (!currentUser) return false
+      
+      // 管理员可以删除任何文章
+      if (currentUser.role === 'admin') return true
+      
+      // 作者可以删除自己的文章
+      return this.article.author_id === currentUser.id
     }
   },
   async created() {
@@ -499,6 +520,40 @@ export default {
       const title = encodeURIComponent(this.article?.title || '')
       const desc = encodeURIComponent(this.article?.summary || '')
       window.open(`https://connect.qq.com/widget/shareqq/index.html?url=${url}&title=${title}&desc=${desc}`)
+    },
+    
+    async deleteArticle() {
+      if (!confirm('确定要删除这篇文章吗？删除后无法恢复。')) {
+        return
+      }
+      
+      try {
+        const token = localStorage.getItem('authToken')
+        if (!token) {
+          alert('请先登录')
+          return
+        }
+        
+        const response = await axios.delete(
+          `http://localhost:3001/api/articles/${this.articleId}`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        )
+        
+        if (response.data.success) {
+          alert('文章删除成功')
+          // 返回文章列表页
+          this.$router.push({ name: 'articles' })
+        } else {
+          alert(response.data.message || '删除失败')
+        }
+      } catch (error) {
+        console.error('删除文章失败:', error)
+        if (error.response?.status === 403) {
+          alert('您没有权限删除此文章')
+        } else {
+          alert('删除失败，请重试')
+        }
+      }
     }
   },
   mounted() {
@@ -1073,6 +1128,45 @@ export default {
 .comment-reply-btn:hover {
   background: #edf2f7;
   border-color: #cbd5e0;
+}
+
+/* 文章操作按钮样式 */
+.article-actions {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid #e2e8f0;
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+}
+
+.delete-article-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.delete-article-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(239, 68, 68, 0.3);
+  background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+}
+
+.delete-article-btn:active {
+  transform: translateY(0);
+}
+
+.delete-article-btn .btn-icon {
+  font-size: 16px;
 }
 
 /* 分享功能样式 */

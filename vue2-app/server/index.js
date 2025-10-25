@@ -494,20 +494,37 @@ app.put('/api/articles/:id', async (req, res) => {
   }
 })
 
-app.delete('/api/articles/:id', async (req, res) => {
+app.delete('/api/articles/:id', require('./middleware/auth').authenticateToken, async (req, res) => {
   try {
     const { id } = req.params
+    const userId = req.user.id
+    const userRole = req.user.role || 'user'
     
-    const [result] = await pool.query('DELETE FROM articles WHERE id=?', [id])
+    // 先检查文章是否存在并获取作者信息
+    const [articles] = await pool.query('SELECT author_id FROM articles WHERE id = ?', [id])
+    
+    if (articles.length === 0) {
+      return res.status(404).json({ success: false, message: '文章不存在' })
+    }
+    
+    const article = articles[0]
+    
+    // 检查权限：只有文章作者或管理员可以删除
+    if (article.author_id !== userId && userRole !== 'admin') {
+      return res.status(403).json({ success: false, message: '您没有权限删除此文章' })
+    }
+    
+    // 删除文章
+    const [result] = await pool.query('DELETE FROM articles WHERE id = ?', [id])
     
     if (result.affectedRows === 0) {
-      return res.status(404).json({ message: '文章不存在' })
+      return res.status(404).json({ success: false, message: '文章删除失败' })
     }
     
     res.json({ success: true, message: '文章删除成功' })
   } catch (error) {
     console.error('删除文章失败:', error)
-    res.status(500).json({ message: '删除文章失败', error: error.message })
+    res.status(500).json({ success: false, message: '删除文章失败', error: error.message })
   }
 })
 
@@ -937,6 +954,41 @@ app.post('/api/user/posts', require('./middleware/auth').authenticateToken, asyn
   } catch (error) {
     console.error('发布帖子失败:', error)
     res.status(500).json({ message: '发布帖子失败', error: error.message })
+  }
+})
+
+// 删除论坛帖子
+app.delete('/api/forum/posts/:id', require('./middleware/auth').authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params
+    const userId = req.user.id
+    const userRole = req.user.role || 'user'
+    
+    // 先检查帖子是否存在并获取作者信息
+    const [posts] = await pool.query('SELECT author_id FROM forum_posts WHERE id = ?', [id])
+    
+    if (posts.length === 0) {
+      return res.status(404).json({ success: false, message: '帖子不存在' })
+    }
+    
+    const post = posts[0]
+    
+    // 检查权限：只有帖子作者或管理员可以删除
+    if (post.author_id !== userId && userRole !== 'admin') {
+      return res.status(403).json({ success: false, message: '您没有权限删除此帖子' })
+    }
+    
+    // 删除帖子
+    const [result] = await pool.query('DELETE FROM forum_posts WHERE id = ?', [id])
+    
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ success: false, message: '帖子删除失败' })
+    }
+    
+    res.json({ success: true, message: '帖子删除成功' })
+  } catch (error) {
+    console.error('删除帖子失败:', error)
+    res.status(500).json({ success: false, message: '删除帖子失败', error: error.message })
   }
 })
 

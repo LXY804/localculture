@@ -17,6 +17,14 @@
               <div class="tags"><span v-for="t in post.tags" :key="t" class="tag"># {{ t }}</span></div>
             </div>
           </div>
+
+          <!-- 帖子操作按钮（只有作者可见） -->
+          <div v-if="canDeletePost" class="post-actions">
+            <button class="delete-post-btn" @click="deletePost">
+              <span class="btn-icon">🗑️</span>
+              删除帖子
+            </button>
+          </div>
         </header>
 
         <div class="article-content">
@@ -98,6 +106,18 @@ export default {
     isLikedPost() { return this.postId ? this.$store.getters.isLiked(this.postId) : false },
     isFavoritedPost() { return this.postId ? this.$store.getters.isFavorited(this.postId) : false },
     allComments() { return this.postId ? this.$store.getters.getCommentsByArticle(this.postId) : [] },
+    canDeletePost() {
+      if (!this.post) return false
+      
+      const currentUser = this.$store.state.userProfile
+      if (!currentUser) return false
+      
+      // 管理员可以删除任何帖子
+      if (currentUser.role === 'admin') return true
+      
+      // 作者可以删除自己的帖子（通过username或nickname比较）
+      return this.post.author === currentUser.username || this.post.author === currentUser.nickname
+    },
     rootComments() { return this.allComments.filter(c => !c.parentCommentId) },
     childrenMap() {
       const map = {}
@@ -130,6 +150,52 @@ export default {
     },
     onToggleCommentLike(c) {
       this.$store.dispatch('toggleCommentLike', { commentId: c.id, articleId: this.postId, commentAuthor: c.author, targetType: 'forum' })
+    },
+    async deletePost() {
+      if (!confirm('确定要删除这个帖子吗？删除后无法恢复。')) {
+        return
+      }
+      
+      try {
+        const token = localStorage.getItem('authToken')
+        if (!token) {
+          alert('请先登录')
+          return
+        }
+        
+        // 对于本地数据，直接从数组中删除
+        const index = forumPosts.findIndex(p => p.id === this.postId)
+        if (index !== -1) {
+          forumPosts.splice(index, 1)
+          alert('帖子删除成功')
+          // 返回论坛列表页
+          this.$router.push({ name: 'forum' })
+        } else {
+          alert('帖子不存在')
+        }
+        
+        // 如果使用API，可以调用以下代码：
+        /*
+        const response = await axios.delete(
+          `http://localhost:3001/api/forum/posts/${this.postId}`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        )
+        
+        if (response.data.success) {
+          alert('帖子删除成功')
+          this.$router.push({ name: 'forum' })
+        } else {
+          alert(response.data.message || '删除失败')
+        }
+        */
+      } catch (error) {
+        console.error('删除帖子失败:', error)
+        if (error.response?.status === 403) {
+          alert('您没有权限删除此帖子')
+        } else {
+          alert('删除失败，请重试')
+        }
+      }
     }
   },
   mounted() {
@@ -157,6 +223,45 @@ export default {
 .article-container { max-width: 800px; margin: 0 auto; padding: 40px 24px; }
 .article-header { background: #fff; border-radius: 16px; padding: 40px; margin-bottom: 24px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
 .article-title { font-size: 2.2rem; font-weight: 700; color: #1a202c; line-height: 1.2; margin: 0 0 16px; text-align: center; }
+
+/* 帖子操作按钮样式 */
+.post-actions {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid #e2e8f0;
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+}
+
+.delete-post-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.delete-post-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(239, 68, 68, 0.3);
+  background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+}
+
+.delete-post-btn:active {
+  transform: translateY(0);
+}
+
+.delete-post-btn .btn-icon {
+  font-size: 16px;
+}
 .article-summary { font-size: 1.1rem; color: #4a5568; line-height: 1.6; text-align: center; margin: 0 0 24px; }
 .article-meta { display: flex; flex-direction: column; gap: 10px; padding-top: 16px; border-top: 1px solid #e2e8f0; }
 .meta-item { display: flex; gap: 8px; align-items: center; }
