@@ -75,26 +75,23 @@
     </div>
 
     <!-- 发布帖子弹窗 -->
-    <BaseModal v-if="showPostModal" @close="closePostModal">
-      <h3>发布帖子</h3>
+    <BaseModal v-if="showPostModal" @close="handleClosePostModal">
+      <h3>{{ editingDraftId ? '编辑草稿' : '发布帖子' }}</h3>
       <div class="form-col">
         <label>主题分类
-          <select v-model="newPost.cat" @change="saveDraft">
+          <select v-model="newPost.cat">
             <option v-for="c in categories" :key="c.key" :value="c.key">{{ c.name }}</option>
           </select>
         </label>
         <label>标题
-          <input v-model="newPost.title" placeholder="请输入标题" @input="saveDraft" />
+          <input v-model="newPost.title" placeholder="请输入标题" />
         </label>
         <label>内容摘要
-          <textarea v-model="newPost.brief" rows="3" placeholder="简要描述你的观点" @input="saveDraft"></textarea>
+          <textarea v-model="newPost.brief" rows="3" placeholder="简要描述你的观点"></textarea>
         </label>
-        <div class="draft-info" v-if="hasDraft">
-          <span class="draft-text">💾 已自动保存草稿</span>
-        </div>
         <div class="dialog-actions">
-          <button @click="submitPost" :disabled="!newPost.title.trim()">提交</button>
-          <button class="ghost" @click="closePostModal">取消</button>
+          <button @click="submitPost" :disabled="!newPost.title.trim()">发布</button>
+          <button class="ghost" @click="showPostModal=false">取消</button>
         </div>
       </div>
     </BaseModal>
@@ -142,7 +139,7 @@ export default {
       showReplyModal: false,
       replyTarget: null,
       replyText: '',
-      loading: false,
+      loading: false
     }
   },
   computed: {
@@ -160,9 +157,18 @@ export default {
         case 'latest':
           return sorted.sort((a, b) => new Date(b.date) - new Date(a.date))
         case 'hottest':
-          return sorted.sort((a, b) => (b.views || 0) - (a.views || 0))
+          // 热度 = 浏览量 + 点赞数*2 + 评论数*3
+          return sorted.sort((a, b) => {
+            const hotA = (a.views || 0) + (a.likes || 0) * 2 + (this.getCommentCount(a.id) || 0) * 3
+            const hotB = (b.views || 0) + (b.likes || 0) * 2 + (this.getCommentCount(b.id) || 0) * 3
+            return hotB - hotA
+          })
         case 'most_replied':
-          return sorted.sort((a, b) => (b.replies || 0) - (a.replies || 0))
+          return sorted.sort((a, b) => {
+            const repliesA = this.getCommentCount(a.id) || 0
+            const repliesB = this.getCommentCount(b.id) || 0
+            return repliesB - repliesA
+          })
         default:
           return sorted
       }
@@ -180,7 +186,6 @@ export default {
     },
     openPostModal() { 
       this.showPostModal = true
-      this.loadDraft()
     },
     submitPost() {
       if (!this.newPost.title) return alert('请输入标题')
@@ -199,7 +204,6 @@ export default {
       }
       this.posts.unshift(post)
       this.showPostModal = false
-      this.clearDraft()
       this.newPost = { cat: this.current, title: '', brief: '' }
     },
     openReplyModal(p) { this.replyTarget = p; this.replyText=''; this.showReplyModal = true },
@@ -230,43 +234,6 @@ export default {
     goToPostDetail(postId) {
       // 跳转到帖子详情页面
       this.$router.push({ name: 'forum-post-detail', params: { id: postId } })
-    },
-    
-    // 草稿保存功能
-    saveDraft() {
-      const draft = {
-        title: this.newPost.title,
-        brief: this.newPost.brief,
-        cat: this.newPost.cat,
-        timestamp: Date.now()
-      }
-      localStorage.setItem('forum_draft', JSON.stringify(draft))
-    },
-    
-    loadDraft() {
-      const draft = localStorage.getItem('forum_draft')
-      if (draft) {
-        try {
-          const parsedDraft = JSON.parse(draft)
-          // 检查草稿是否在24小时内
-          if (Date.now() - parsedDraft.timestamp < 24 * 60 * 60 * 1000) {
-            this.newPost.title = parsedDraft.title || ''
-            this.newPost.brief = parsedDraft.brief || ''
-            this.newPost.cat = parsedDraft.cat || 'all'
-          }
-        } catch (error) {
-          console.error('加载草稿失败:', error)
-        }
-      }
-    },
-    
-    clearDraft() {
-      localStorage.removeItem('forum_draft')
-    },
-    
-    closePostModal() {
-      this.showPostModal = false
-      this.newPost = { cat: this.current, title: '', brief: '' }
     }
   }
 }
@@ -657,21 +624,21 @@ export default {
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
 }
 .dialog-actions { display: flex; gap: 8px; justify-content: flex-end; }
-.dialog-actions .ghost { background: #f3f4f6; border: 1px solid #e5e7eb; }
-
-/* 草稿提示样式 */
-.draft-info {
-  padding: 8px 12px;
-  background: #f0f9ff;
-  border: 1px solid #bae6fd;
+.dialog-actions button {
+  padding: 8px 16px;
   border-radius: 6px;
-  margin: 8px 0;
-}
-
-.draft-text {
-  color: #0369a1;
-  font-size: 12px;
+  cursor: pointer;
+  font-size: 14px;
   font-weight: 500;
+  transition: all 0.2s ease;
+}
+.dialog-actions .ghost { 
+  background: #fff; 
+  border: 1px solid #e5e7eb; 
+  color: #374151;
+}
+.dialog-actions .ghost:hover {
+  background: #f3f4f6;
 }
 
 /* 响应式设计 */

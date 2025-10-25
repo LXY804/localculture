@@ -345,7 +345,7 @@ export default {
       myPosts: [],
       myComments: [],
       myLikes: [],
-        myActivities: [],
+      myActivities: [],
       account: {
         security: { passwordSet: false },
         mobile: '182****9635',
@@ -375,7 +375,7 @@ export default {
         joinDate: profile.created_at ? new Date(profile.created_at).toLocaleDateString() : '未知',
         role: profile.role || 'user'
       }
-    }
+    },
   },
   async mounted() {
     await this.loadUserData()
@@ -1399,6 +1399,7 @@ input:checked + .slider:before {
 .account-action { padding: 6px 12px; border: 1px solid #dcdfe6; background: #fff; border-radius: 4px; cursor: pointer; }
 .account-action.danger { border-color: #dc3545; color: #dc3545; }
 .account-action:hover { background: #f2f3f5; }
+
 </style>
 
 
