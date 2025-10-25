@@ -33,7 +33,9 @@
           <button class="linklike logout-btn" @click="logout">退出</button>
         </template>
       </nav>
-      <router-view />
+      <PageTransition>
+        <router-view />
+      </PageTransition>
       <AuthLoginModal
         v-if="openLogin"
         @close="openLogin=false"
@@ -63,6 +65,7 @@ export default {
     AuthLoginModal: () => import('./components/AuthLoginModal.vue'),
     AuthRegisterModal: () => import('./components/AuthRegisterModal.vue'),
     AuthForgotModal: () => import('./components/AuthForgotModal.vue'),
+    PageTransition: () => import('./components/PageTransition.vue'),
   },
   computed: {
     isAuthed() { return this.$store.getters.isAuthenticated },
@@ -99,6 +102,81 @@ html, body { margin: 0; padding: 0; }
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   color: #2c3e50;
+}
+
+/* 全局动画效果 */
+* {
+  transition: all 0.2s ease;
+}
+
+/* 按钮悬停效果 */
+button, .btn {
+  transition: all 0.2s ease;
+}
+
+button:hover, .btn:hover {
+  transform: translateY(-1px);
+}
+
+button:active, .btn:active {
+  transform: translateY(0);
+}
+
+/* 卡片悬停效果 */
+.card, .post-card {
+  transition: all 0.3s ease;
+}
+
+.card:hover, .post-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+}
+
+/* 链接悬停效果 */
+a {
+  transition: color 0.2s ease;
+}
+
+a:hover {
+  color: #2563eb;
+}
+
+/* 输入框焦点效果 */
+input, textarea, select {
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+input:focus, textarea:focus, select:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+/* 加载动画 */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideIn {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(0); }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.fade-in {
+  animation: fadeIn 0.5s ease-out;
+}
+
+.slide-in {
+  animation: slideIn 0.3s ease-out;
+}
+
+.pulse {
+  animation: pulse 2s infinite;
 }
 .nav {
   display: flex;

@@ -18,6 +18,18 @@
       <button v-for="c in categories" :key="c.key" class="tab" :class="{ active: c.key===current }" @click="switchCat(c.key)">{{ c.name }}</button>
     </div>
 
+    <!-- 排序选项 -->
+    <div class="sort-section">
+      <div class="sort-controls">
+        <span class="sort-label">排序方式：</span>
+        <select v-model="sortBy" @change="applySorting" class="sort-select">
+          <option value="latest">最新</option>
+          <option value="hottest">最热</option>
+          <option value="most_replied">回复最多</option>
+        </select>
+      </div>
+    </div>
+
       <div class="posts-list">
         <div v-for="p in presented" :key="p.id" class="post-card">
           <div class="post-header">
@@ -63,23 +75,26 @@
     </div>
 
     <!-- 发布帖子弹窗 -->
-    <BaseModal v-if="showPostModal" @close="showPostModal=false">
+    <BaseModal v-if="showPostModal" @close="closePostModal">
       <h3>发布帖子</h3>
       <div class="form-col">
         <label>主题分类
-          <select v-model="newPost.cat">
+          <select v-model="newPost.cat" @change="saveDraft">
             <option v-for="c in categories" :key="c.key" :value="c.key">{{ c.name }}</option>
           </select>
         </label>
         <label>标题
-          <input v-model="newPost.title" placeholder="请输入标题" />
+          <input v-model="newPost.title" placeholder="请输入标题" @input="saveDraft" />
         </label>
         <label>内容摘要
-          <textarea v-model="newPost.brief" rows="3" placeholder="简要描述你的观点"></textarea>
+          <textarea v-model="newPost.brief" rows="3" placeholder="简要描述你的观点" @input="saveDraft"></textarea>
         </label>
+        <div class="draft-info" v-if="hasDraft">
+          <span class="draft-text">💾 已自动保存草稿</span>
+        </div>
         <div class="dialog-actions">
-          <button @click="submitPost">提交</button>
-          <button class="ghost" @click="showPostModal=false">取消</button>
+          <button @click="submitPost" :disabled="!newPost.title.trim()">提交</button>
+          <button class="ghost" @click="closePostModal">取消</button>
         </div>
       </div>
     </BaseModal>
@@ -112,6 +127,7 @@ export default {
     return {
       q: '',
       current: 'all',
+      sortBy: 'latest',
       categories: [
         { key: 'all', name: '全部' },
         { key: 'food', name: '美食' },
@@ -126,6 +142,7 @@ export default {
       showReplyModal: false,
       replyTarget: null,
       replyText: '',
+      loading: false,
     }
   },
   computed: {
@@ -138,14 +155,33 @@ export default {
       )
     },
     presented() {
-      return [...this.filtered].sort((a,b)=> new Date(b.date)-new Date(a.date))
+      const sorted = [...this.filtered]
+      switch (this.sortBy) {
+        case 'latest':
+          return sorted.sort((a, b) => new Date(b.date) - new Date(a.date))
+        case 'hottest':
+          return sorted.sort((a, b) => (b.views || 0) - (a.views || 0))
+        case 'most_replied':
+          return sorted.sort((a, b) => (b.replies || 0) - (a.replies || 0))
+        default:
+          return sorted
+      }
+    },
+    hasDraft() {
+      return this.newPost.title.trim() || this.newPost.brief.trim()
     }
   },
   methods: {
     ...mapActions(['toggleLike', 'toggleFavorite']),
     switchCat(key) { this.current = key },
     applyFilter() {},
-    openPostModal() { this.showPostModal = true },
+    applySorting() {
+      // 排序改变时重新计算
+    },
+    openPostModal() { 
+      this.showPostModal = true
+      this.loadDraft()
+    },
     submitPost() {
       if (!this.newPost.title) return alert('请输入标题')
       const post = {
@@ -157,9 +193,13 @@ export default {
         cat: this.newPost.cat || 'all',
         author: this.$store.getters.username || '匿名用户',
         date: new Date().toISOString(),
+        views: 0,
+        likes: 0,
+        replies: 0
       }
       this.posts.unshift(post)
       this.showPostModal = false
+      this.clearDraft()
       this.newPost = { cat: this.current, title: '', brief: '' }
     },
     openReplyModal(p) { this.replyTarget = p; this.replyText=''; this.showReplyModal = true },
@@ -190,6 +230,43 @@ export default {
     goToPostDetail(postId) {
       // 跳转到帖子详情页面
       this.$router.push({ name: 'forum-post-detail', params: { id: postId } })
+    },
+    
+    // 草稿保存功能
+    saveDraft() {
+      const draft = {
+        title: this.newPost.title,
+        brief: this.newPost.brief,
+        cat: this.newPost.cat,
+        timestamp: Date.now()
+      }
+      localStorage.setItem('forum_draft', JSON.stringify(draft))
+    },
+    
+    loadDraft() {
+      const draft = localStorage.getItem('forum_draft')
+      if (draft) {
+        try {
+          const parsedDraft = JSON.parse(draft)
+          // 检查草稿是否在24小时内
+          if (Date.now() - parsedDraft.timestamp < 24 * 60 * 60 * 1000) {
+            this.newPost.title = parsedDraft.title || ''
+            this.newPost.brief = parsedDraft.brief || ''
+            this.newPost.cat = parsedDraft.cat || 'all'
+          }
+        } catch (error) {
+          console.error('加载草稿失败:', error)
+        }
+      }
+    },
+    
+    clearDraft() {
+      localStorage.removeItem('forum_draft')
+    },
+    
+    closePostModal() {
+      this.showPostModal = false
+      this.newPost = { cat: this.current, title: '', brief: '' }
     }
   }
 }
@@ -367,6 +444,43 @@ export default {
   margin-bottom: 20px;
 }
 
+/* 排序区域 */
+.sort-section {
+  margin-bottom: 20px;
+  padding: 16px;
+  background: #f8fafc;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+}
+
+.sort-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.sort-label {
+  font-weight: 500;
+  color: #374151;
+  font-size: 14px;
+}
+
+.sort-select {
+  padding: 6px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  background: #ffffff;
+  font-size: 14px;
+  cursor: pointer;
+  transition: border-color 0.2s ease;
+}
+
+.sort-select:focus {
+  outline: none;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
 .tab {
   padding: 8px 16px;
   border-radius: 6px;
@@ -535,9 +649,30 @@ export default {
   padding: 8px 10px; 
   border: 1px solid #e5e7eb; 
   border-radius: 6px; 
+  transition: border-color 0.2s ease;
+}
+.form-col input:focus, .form-col textarea:focus, .form-col select:focus {
+  outline: none;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
 }
 .dialog-actions { display: flex; gap: 8px; justify-content: flex-end; }
 .dialog-actions .ghost { background: #f3f4f6; border: 1px solid #e5e7eb; }
+
+/* 草稿提示样式 */
+.draft-info {
+  padding: 8px 12px;
+  background: #f0f9ff;
+  border: 1px solid #bae6fd;
+  border-radius: 6px;
+  margin: 8px 0;
+}
+
+.draft-text {
+  color: #0369a1;
+  font-size: 12px;
+  font-weight: 500;
+}
 
 /* 响应式设计 */
 @media (max-width: 768px) {
