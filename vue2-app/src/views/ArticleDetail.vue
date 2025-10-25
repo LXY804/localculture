@@ -99,54 +99,6 @@
           </div>
         </div>
 
-        <!-- 分享功能 -->
-        <div class="share-section">
-          <h3 class="share-title">分享文章</h3>
-          <div class="share-buttons">
-            <button class="share-btn copy-btn" @click="copyLink">
-              <span class="share-icon">🔗</span>
-              复制链接
-            </button>
-            <button class="share-btn wechat-btn" @click="shareToWechat">
-              <span class="share-icon">💬</span>
-              微信分享
-            </button>
-            <button class="share-btn qq-btn" @click="shareToQQ">
-              <span class="share-icon">🐧</span>
-              QQ分享
-            </button>
-          </div>
-        </div>
-
-        <!-- 相关推荐 -->
-        <div class="related-section" v-if="relatedArticles.length > 0">
-          <h3 class="related-title">相关推荐</h3>
-          <div class="related-grid">
-            <div 
-              v-for="related in relatedArticles" 
-              :key="related.id"
-              class="related-card"
-              @click="goToArticle(related.id)"
-            >
-              <div class="related-cover" :style="{ backgroundImage: related.cover ? `url(${related.cover})` : 'none' }">
-                <div v-if="!related.cover" class="related-cover-placeholder">
-                  <span class="related-cover-icon">📄</span>
-                </div>
-              </div>
-              <div class="related-content">
-                <h4 class="related-card-title">{{ related.title }}</h4>
-                <p class="related-card-summary">{{ getRelatedSummary(related) }}</p>
-                <div class="related-card-meta">
-                  <span class="related-category">{{ related.category }}</span>
-                  <span class="related-stats">
-                    👁️ {{ related.views || 0 }} 👍 {{ related.likes || 0 }}
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
         <!-- 评论区域 -->
         <div class="comments-section">
           <h3 class="comments-title">评论 ({{ comments.length }})</h3>
@@ -209,6 +161,54 @@
             </div>
             <div v-if="comments.length === 0" class="no-comments">
               暂无评论，快来抢沙发吧！
+            </div>
+          </div>
+        </div>
+
+        <!-- 分享功能 -->
+        <div class="share-section">
+          <h3 class="share-title">分享文章</h3>
+          <div class="share-buttons">
+            <button class="share-btn copy-btn" @click="copyLink">
+              <span class="share-icon">🔗</span>
+              复制链接
+            </button>
+            <button class="share-btn wechat-btn" @click="shareToWechat">
+              <span class="share-icon">💬</span>
+              微信分享
+            </button>
+            <button class="share-btn qq-btn" @click="shareToQQ">
+              <span class="share-icon">🐧</span>
+              QQ分享
+            </button>
+          </div>
+        </div>
+
+        <!-- 相关推荐 -->
+        <div class="related-section" v-if="relatedArticles.length > 0">
+          <h3 class="related-title">相关推荐</h3>
+          <div class="related-grid">
+            <div 
+              v-for="related in relatedArticles" 
+              :key="related.id"
+              class="related-card"
+              @click="goToArticle(related.id)"
+            >
+              <div class="related-cover" :style="{ backgroundImage: related.cover ? `url(${related.cover})` : 'none' }">
+                <div v-if="!related.cover" class="related-cover-placeholder">
+                  <span class="related-cover-icon">📄</span>
+                </div>
+              </div>
+              <div class="related-content">
+                <h4 class="related-card-title">{{ related.title }}</h4>
+                <p class="related-card-summary">{{ getRelatedSummary(related) }}</p>
+                <div class="related-card-meta">
+                  <span class="related-category">{{ related.category }}</span>
+                  <span class="related-stats">
+                    👁️ {{ related.views || 0 }} 👍 {{ related.likes || 0 }}
+                  </span>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -278,6 +278,19 @@ export default {
       
       // 作者可以删除自己的文章
       return this.article.author_id === currentUser.id
+    }
+  },
+  watch: {
+    // 监听路由参数变化，重新加载文章
+    '$route.params.id': {
+      handler(newId, oldId) {
+        if (newId && newId !== oldId) {
+          this.fetchArticleDetail()
+          this.fetchComments()
+          this.fetchRelatedArticles()
+        }
+      },
+      immediate: false
     }
   },
   async created() {
@@ -489,7 +502,10 @@ export default {
     },
     
     goToArticle(articleId) {
+      // 跳转到新文章并重新加载数据
       this.$router.push({ name: 'article-detail', params: { id: articleId } })
+      // 滚动到顶部
+      window.scrollTo({ top: 0, behavior: 'smooth' })
     },
     
     async copyLink() {
@@ -1260,18 +1276,25 @@ export default {
 .related-card {
   display: flex;
   flex-direction: column;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  border: 2px solid #e2e8f0;
   border-radius: 12px;
   overflow: hidden;
   cursor: pointer;
   transition: all 0.3s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
 }
 
 .related-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+  transform: translateY(-6px);
+  box-shadow: 0 12px 32px rgba(37, 99, 235, 0.2);
   border-color: #2563eb;
+  background: #f8fafc;
+}
+
+.related-card:active {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(37, 99, 235, 0.15);
 }
 
 .related-cover {
@@ -1313,6 +1336,11 @@ export default {
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+  transition: color 0.2s ease;
+}
+
+.related-card:hover .related-card-title {
+  color: #2563eb;
 }
 
 .related-card-summary {
