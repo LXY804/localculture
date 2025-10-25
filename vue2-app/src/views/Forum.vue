@@ -3,6 +3,7 @@
     <!-- 搜索区域 -->
     <div class="search-section">
       <input v-model="q" class="search-input" placeholder="搜索论坛帖子..." @keyup.enter="applyFilter" />
+      <button class="search-btn" @click="applyFilter">搜索</button>
     </div>
 
     
@@ -277,7 +278,7 @@ export default {
 
 .search-btn {
   padding: 12px 24px;
-  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
   color: white;
   border: none;
   border-radius: 8px;
@@ -285,11 +286,18 @@ export default {
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s ease;
+  white-space: nowrap;
 }
 
 .search-btn:hover {
   transform: translateY(-2px);
-  box-shadow: 0 8px 20px rgba(37, 99, 235, 0.3);
+  box-shadow: 0 8px 20px rgba(239, 68, 68, 0.3);
+  background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+}
+
+.search-btn:active {
+  transform: translateY(0);
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.2);
 }
 
 /* 热门话题区域 */
