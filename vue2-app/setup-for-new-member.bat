@@ -54,24 +54,45 @@ echo.
 echo 请确保已完成以下操作：
 echo 1. MySQL 已安装并运行
 echo 2. 已在 .env 文件中配置数据库密码
-echo 3. 已创建 localculture 数据库
 echo.
-echo 数据库初始化命令（请在 MySQL 中手动执行）：
+echo ============================================
+echo   数据库初始化步骤
+echo ============================================
+echo.
+echo 第一步：创建数据库（在 MySQL 命令行中执行）
 echo ----------------------------------------
 echo CREATE DATABASE IF NOT EXISTS localculture CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-echo.
-echo 然后在 Windows PowerShell 中执行：
-echo Get-Content sql\schema.sql ^| mysql -u root -p localculture
-echo Get-Content sql\data.sql ^| mysql -u root -p localculture
-echo Get-Content sql\fix-articles-data.sql ^| mysql -u root -p localculture
 echo ----------------------------------------
-
 echo.
+echo 第二步：导入数据库表结构和数据（在 PowerShell 中执行）
+echo ----------------------------------------
+echo # 1. 基础表结构
+echo Get-Content sql\schema.sql ^| mysql -u root -p localculture
+echo.
+echo # 2. 基础数据
+echo Get-Content sql\data.sql ^| mysql -u root -p localculture
+echo.
+echo # 3. 修复文章数据
+echo Get-Content sql\fix-articles-data.sql ^| mysql -u root -p localculture
+
+echo ----------------------------------------
 echo ============================================
-echo   初始化完成！
-echo   接下来请：
-echo   1. 初始化数据库（按上述命令）
-echo   2. 运行 start.bat 启动项目
+echo   ✅ 初始化准备完成！
+echo ============================================
+echo.
+echo 📋 接下来请按顺序执行：
+echo   1. 在 MySQL 中创建数据库（上述第一步）
+echo   2. 在 PowerShell 中导入数据（上述第二步）
+echo   3. 运行 start.bat 启动项目
+echo   4. 访问 http://localhost:8080
+echo   5. 使用测试账号登录: user / password
+echo.
+echo 📖 详细文档：
+echo   - 快速开始: QUICK_FIX_SUMMARY.md
+echo   - 完整指南: INTERACTION_SYSTEM_GUIDE.md
+echo   - 工作总结: WORK_COMPLETED_SUMMARY.md
+echo.
 echo ============================================
 pause
+
 

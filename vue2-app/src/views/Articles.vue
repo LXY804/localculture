@@ -285,11 +285,27 @@ export default {
         alert('发布失败：' + (error.message || '未知错误'))
       }
     },
-    toggleLike(articleId) {
-      this.$store.dispatch('toggleLike', articleId)
+    async toggleLike(articleId) {
+      try {
+        await this.$store.dispatch('toggleLike', articleId)
+        // 触发数据更新事件
+        this.$root.$emit('userDataChanged', { type: 'like' })
+        // 刷新文章列表以更新UI
+        await this.fetchArticles()
+      } catch (error) {
+        // 错误已在action中处理
+      }
     },
-    toggleFavorite(articleId) {
-      this.$store.dispatch('toggleFavorite', articleId)
+    async toggleFavorite(articleId) {
+      try {
+        await this.$store.dispatch('toggleFavorite', articleId)
+        // 触发数据更新事件
+        this.$root.$emit('userDataChanged', { type: 'favorite' })
+        // 刷新文章列表以更新UI
+        await this.fetchArticles()
+      } catch (error) {
+        // 错误已在action中处理
+      }
     }
   }
 }

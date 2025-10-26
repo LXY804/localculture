@@ -350,6 +350,8 @@ export default {
         if (response.data.success) {
           // 重新获取文章详情以获取最新数据
           await this.fetchArticleDetail()
+          // 触发数据更新事件
+          this.$root.$emit('userDataChanged', { type: 'like' })
           alert(response.data.message)
         }
       } catch (error) {
@@ -377,6 +379,8 @@ export default {
         if (response.data.success) {
           // 重新获取文章详情以获取最新数据
           await this.fetchArticleDetail()
+          // 触发数据更新事件
+          this.$root.$emit('userDataChanged', { type: 'favorite' })
           alert(response.data.message)
         }
       } catch (error) {
@@ -406,6 +410,8 @@ export default {
           await this.fetchArticleDetail()
           await this.fetchComments()
           this.newComment = ''
+          // 触发数据更新事件
+          this.$root.$emit('userDataChanged', { type: 'comment' })
           alert('评论发表成功！')
         }
       } catch (error) {

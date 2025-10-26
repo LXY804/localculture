@@ -162,6 +162,96 @@ CREATE TABLE IF NOT EXISTS `hotarticles` (
   FOREIGN KEY (`article_id`) REFERENCES `articles`(`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- 论坛帖子表
+CREATE TABLE IF NOT EXISTS `forum_posts` (
+  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `title` VARCHAR(255) NOT NULL,
+  `content` MEDIUMTEXT NOT NULL,
+  `category` VARCHAR(64) DEFAULT NULL,
+  `author_id` BIGINT UNSIGNED NOT NULL,
+  `status` ENUM('draft','published','hidden','deleted') DEFAULT 'published',
+  `visible` TINYINT(1) DEFAULT 1,
+  `cover` VARCHAR(255),
+  `views` INT DEFAULT 0,
+  `likes` INT DEFAULT 0,
+  `comments_count` INT DEFAULT 0,
+  `favorites_count` INT DEFAULT 0,
+  `is_pinned` TINYINT(1) DEFAULT 0,
+  `is_hot` TINYINT(1) DEFAULT 0,
+  `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  FOREIGN KEY (`author_id`) REFERENCES `users`(`id`) ON DELETE CASCADE,
+  INDEX `idx_forum_posts_author` (`author_id`),
+  INDEX `idx_forum_posts_status` (`status`),
+  INDEX `idx_forum_posts_category` (`category`),
+  INDEX `idx_forum_posts_created` (`created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='论坛帖子表';
+
+-- 论坛帖子点赞表
+CREATE TABLE IF NOT EXISTS `forum_post_likes` (
+  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `post_id` BIGINT UNSIGNED NOT NULL,
+  `user_id` BIGINT UNSIGNED NOT NULL,
+  `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  FOREIGN KEY (`post_id`) REFERENCES `forum_posts`(`id`) ON DELETE CASCADE,
+  FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE,
+  UNIQUE KEY `user_post_like` (`user_id`, `post_id`),
+  INDEX `idx_forum_likes_post` (`post_id`),
+  INDEX `idx_forum_likes_user` (`user_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='论坛帖子点赞记录表';
+
+-- 论坛帖子收藏表
+CREATE TABLE IF NOT EXISTS `forum_post_favorites` (
+  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `post_id` BIGINT UNSIGNED NOT NULL,
+  `user_id` BIGINT UNSIGNED NOT NULL,
+  `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  FOREIGN KEY (`post_id`) REFERENCES `forum_posts`(`id`) ON DELETE CASCADE,
+  FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE,
+  UNIQUE KEY `user_post_favorite` (`user_id`, `post_id`),
+  INDEX `idx_forum_favorites_post` (`post_id`),
+  INDEX `idx_forum_favorites_user` (`user_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='论坛帖子收藏记录表';
+
+-- 论坛帖子评论表
+CREATE TABLE IF NOT EXISTS `forum_post_comments` (
+  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `post_id` BIGINT UNSIGNED NOT NULL,
+  `user_id` BIGINT UNSIGNED NOT NULL,
+  `content` TEXT NOT NULL,
+  `parent_id` BIGINT UNSIGNED DEFAULT NULL,
+  `status` ENUM('active','hidden','deleted') DEFAULT 'active',
+  `likes` INT DEFAULT 0,
+  `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  FOREIGN KEY (`post_id`) REFERENCES `forum_posts`(`id`) ON DELETE CASCADE,
+  FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE,
+  FOREIGN KEY (`parent_id`) REFERENCES `forum_post_comments`(`id`) ON DELETE CASCADE,
+  INDEX `idx_forum_comments_post` (`post_id`),
+  INDEX `idx_forum_comments_user` (`user_id`),
+  INDEX `idx_forum_comments_status` (`status`),
+  INDEX `idx_forum_comments_parent` (`parent_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='论坛帖子评论表';
+
+-- 验证表结构
+-- 查看论坛相关表
+SELECT 
+    TABLE_NAME as '表名',
+    TABLE_COMMENT as '说明'
+FROM INFORMATION_SCHEMA.TABLES
+WHERE TABLE_SCHEMA = 'localculture' 
+  AND TABLE_NAME LIKE 'forum%'
+ORDER BY TABLE_NAME;
+
+SELECT '论坛表结构创建完成！' as message;
+
+
+
+
 -- =============================================
 -- 插入测试数据
 -- =============================================

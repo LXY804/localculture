@@ -82,6 +82,14 @@ export default {
       await this.$store.dispatch('logout')
       this.$router.replace('/home')
     }
+  },
+  async created() {
+    // 🆕 页面加载时同步用户状态
+    const token = localStorage.getItem('authToken')
+    if (token && this.$store.state.authToken) {
+      console.log('检测到已登录用户，开始同步状态...')
+      await this.$store.dispatch('syncUserInteractions')
+    }
   }
 }
 </script>

@@ -36,11 +36,12 @@
           <div class="post-header">
             <div class="post-info">
               <h3 class="post-title" @click="goToPostDetail(p.id)">{{ p.title }}</h3>
-              <p class="post-brief">{{ p.brief }}</p>
+              <p class="post-brief">{{ p.content ? p.content.substring(0, 100) + '...' : '暂无摘要' }}</p>
               <div class="post-meta">
                 <span class="post-author">作者：{{ p.author }}</span>
-                <span class="post-date">{{ formatDate(p.date) }}</span>
-                <span class="post-category">{{ getCategoryName(p.cat) }}</span>
+                <span class="post-date">{{ formatDate(p.created_at) }}</span>
+                <span class="post-category">{{ p.category || '未分类' }}</span>
+                <span class="post-stats">浏览：{{ p.views }} 点赞：{{ p.likes }} 评论：{{ p.comments_count }}</span>
               </div>
             </div>
           </div>
@@ -49,26 +50,33 @@
             <span class="tag" v-for="t in p.tags" :key="t"># {{ t }}</span>
           </div>
 
-          <div class="post-actions">
+          <div class="post-actions" v-if="isLoggedIn">
             <button 
               class="action-btn like-btn" 
-              :class="{ active: isLiked(p.id) }"
+              :class="{ active: isForumLiked(parseInt(p.id)) }"
               @click.stop="toggleLike(p.id)"
             >
               <span class="btn-icon">👍</span>
-              <span class="btn-text">{{ isLiked(p.id) ? '已赞' : '点赞' }}</span>
+              <span class="btn-text">{{ isForumLiked(parseInt(p.id)) ? '已赞' : '点赞' }}</span>
             </button>
             <button 
               class="action-btn favorite-btn" 
-              :class="{ active: isFavorited(p.id) }"
+              :class="{ active: isForumFavorited(parseInt(p.id)) }"
               @click.stop="toggleFavorite(p.id)"
             >
               <span class="btn-icon">⭐</span>
-              <span class="btn-text">{{ isFavorited(p.id) ? '已收藏' : '收藏' }}</span>
+              <span class="btn-text">{{ isForumFavorited(parseInt(p.id)) ? '已收藏' : '收藏' }}</span>
             </button>
             <button class="action-btn comment-btn" @click.stop="goToPostDetail(p.id)">
               <span class="btn-icon">💬</span>
-              <span class="btn-text">评论 ({{ getCommentCount(p.id) }})</span>
+              <span class="btn-text">评论 ({{ p.comments_count || 0 }})</span>
+            </button>
+        </div>
+        <div class="post-actions" v-else>
+            <span class="login-hint">登录后可点赞收藏</span>
+            <button class="action-btn comment-btn" @click.stop="goToPostDetail(p.id)">
+              <span class="btn-icon">💬</span>
+              <span class="btn-text">评论 ({{ p.comments_count || 0 }})</span>
             </button>
         </div>
         </div>
@@ -115,8 +123,8 @@
 
 <script>
 import BaseModal from '@/components/Modal.vue'
-import { mapGetters, mapActions } from 'vuex'
-import forumPosts from '@/data/forumPosts'
+import { mapGetters } from 'vuex'
+import axios from 'axios'
 
 export default {
   name: 'ForumPage',
@@ -134,7 +142,7 @@ export default {
         { key: 'art', name: '艺术' },
       ],
       
-      posts: forumPosts,
+      posts: [],
       showPostModal: false,
       newPost: { cat: 'all', title: '', brief: '' },
       showReplyModal: false,
@@ -143,31 +151,40 @@ export default {
       loading: false
     }
   },
+  async created() {
+    await this.fetchPosts()
+  },
+  activated() {
+    this.fetchPosts()
+  },
   computed: {
-    ...mapGetters(['isLiked', 'isFavorited', 'getCommentsByArticle']),
+    ...mapGetters(['isForumLiked', 'isForumFavorited', 'getCommentsByArticle']),
+    isLoggedIn() {
+      return !!localStorage.getItem('authToken')
+    },
     filtered() {
       const q = (this.q || '').toLowerCase()
       return this.posts.filter(p =>
-        (this.current==='all' || p.cat===this.current) &&
-        (!q || p.title.toLowerCase().includes(q) || (p.brief||'').toLowerCase().includes(q) || (p.tags||[]).some(t => t.toLowerCase().includes(q)))
+        (this.current==='all' || p.category===this.current) &&
+        (!q || p.title.toLowerCase().includes(q) || (p.content||'').toLowerCase().includes(q))
       )
     },
     presented() {
       const sorted = [...this.filtered]
       switch (this.sortBy) {
         case 'latest':
-          return sorted.sort((a, b) => new Date(b.date) - new Date(a.date))
+          return sorted.sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
         case 'hottest':
           // 热度 = 浏览量 + 点赞数*2 + 评论数*3
           return sorted.sort((a, b) => {
-            const hotA = (a.views || 0) + (a.likes || 0) * 2 + (this.getCommentCount(a.id) || 0) * 3
-            const hotB = (b.views || 0) + (b.likes || 0) * 2 + (this.getCommentCount(b.id) || 0) * 3
+            const hotA = (a.views || 0) + (a.likes || 0) * 2 + (a.comments_count || 0) * 3
+            const hotB = (b.views || 0) + (b.likes || 0) * 2 + (b.comments_count || 0) * 3
             return hotB - hotA
           })
         case 'most_replied':
           return sorted.sort((a, b) => {
-            const repliesA = this.getCommentCount(a.id) || 0
-            const repliesB = this.getCommentCount(b.id) || 0
+            const repliesA = a.comments_count || 0
+            const repliesB = b.comments_count || 0
             return repliesB - repliesA
           })
         default:
@@ -179,7 +196,21 @@ export default {
     }
   },
   methods: {
-    ...mapActions(['toggleLike', 'toggleFavorite']),
+    // 🆕 从数据库获取论坛帖子列表
+    async fetchPosts() {
+      this.loading = true
+      try {
+        const response = await axios.get('http://localhost:3001/api/forum/posts')
+        if (response.data.success) {
+          this.posts = response.data.data.posts
+        }
+      } catch (error) {
+        console.error('获取论坛帖子列表失败:', error)
+      } finally {
+        this.loading = false
+      }
+    },
+    
     switchCat(key) { this.current = key },
     applyFilter() {},
     applySorting() {
@@ -188,24 +219,38 @@ export default {
     openPostModal() { 
       this.showPostModal = true
     },
-    submitPost() {
+    async submitPost() {
       if (!this.newPost.title) return alert('请输入标题')
-      const post = {
-        id: 'f' + (Date.now()),
-        title: this.newPost.title,
-        brief: this.newPost.brief,
-        content: this.newPost.brief,
-        tags: [],
-        cat: this.newPost.cat || 'all',
-        author: this.$store.getters.username || '匿名用户',
-        date: new Date().toISOString(),
-        views: 0,
-        likes: 0,
-        replies: 0
+      
+      const token = localStorage.getItem('authToken')
+      if (!token) {
+        alert('请先登录')
+        return
       }
-      this.posts.unshift(post)
-      this.showPostModal = false
-      this.newPost = { cat: this.current, title: '', brief: '' }
+      
+      try {
+        const response = await axios.post(
+          'http://localhost:3001/api/user/posts',
+          {
+            title: this.newPost.title,
+            content: this.newPost.brief,
+            category: this.newPost.cat === 'all' ? '未分类' : this.newPost.cat
+          },
+          {
+            headers: { Authorization: `Bearer ${token}` }
+          }
+        )
+        
+        if (response.data.success) {
+          alert('帖子发布成功！')
+          this.showPostModal = false
+          this.newPost = { cat: this.current, title: '', brief: '' }
+          await this.fetchPosts()
+        }
+      } catch (error) {
+        console.error('发布帖子失败:', error)
+        alert('发布失败，请重试')
+      }
     },
     openReplyModal(p) { this.replyTarget = p; this.replyText=''; this.showReplyModal = true },
     submitReply() {
@@ -216,21 +261,32 @@ export default {
       this.replyText = ''
     },
     formatDate(iso) {
+      if (!iso) return ''
       const d = new Date(iso); const p=n=>String(n).padStart(2,'0')
-      return `${d.getFullYear()}/${p(d.getMonth()+1)}/${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`
+      return `${d.getFullYear()}/${p(d.getMonth()+1)}/${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`
     },
-    getCategoryName(catKey) {
-      const category = this.categories.find(c => c.key === catKey)
-      return category ? category.name : '未知'
+    // 🆕 使用论坛专用的actions
+    async toggleLike(postId) {
+      try {
+        await this.$store.dispatch('toggleForumLike', parseInt(postId))
+        // 刷新帖子列表以更新UI
+        await this.fetchPosts()
+        // 触发数据更新事件
+        this.$root.$emit('userDataChanged', { type: 'forum-like' })
+      } catch (error) {
+        // 错误已在action中处理
+      }
     },
-    getCommentCount(postId) {
-      return this.$store.getters.getCommentsByArticle(postId).length
-    },
-    toggleLike(postId) {
-      this.$store.dispatch('toggleLike', postId)
-    },
-    toggleFavorite(postId) {
-      this.$store.dispatch('toggleFavorite', postId)
+    async toggleFavorite(postId) {
+      try {
+        await this.$store.dispatch('toggleForumFavorite', parseInt(postId))
+        // 刷新帖子列表以更新UI
+        await this.fetchPosts()
+        // 触发数据更新事件
+        this.$root.$emit('userDataChanged', { type: 'forum-favorite' })
+      } catch (error) {
+        // 错误已在action中处理
+      }
     },
     goToPostDetail(postId) {
       // 跳转到帖子详情页面

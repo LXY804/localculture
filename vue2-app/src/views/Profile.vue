@@ -22,10 +22,10 @@
 
       <!-- 功能按钮区域 -->
       <div class="function-buttons">
-        <button class="func-btn" @click="showMyCollections">我的收藏 ({{ myCollections.length }})</button>
+        <button class="func-btn" @click="showMyCollections">我的收藏 ({{ totalCollections }})</button>
         <button class="func-btn" @click="showMyPosts">我的帖子 ({{ myPosts.length }})</button>
-        <button class="func-btn" @click="showMyComments">我的评论 ({{ myComments.length }})</button>
-        <button class="func-btn" @click="showMyLikes">我的点赞 ({{ myLikes.length }})</button>
+        <button class="func-btn" @click="showMyComments">我的评论 ({{ totalComments }})</button>
+        <button class="func-btn" @click="showMyLikes">我的点赞 ({{ totalLikes }})</button>
         <button class="func-btn" @click="showMyActivities">我的活动 ({{ myActivities.length }})</button>
         <button class="func-btn" @click="currentView = 'messages'">消息 ({{ notifications.length }})</button>
         <button class="func-btn" @click="currentView = 'settings'">消息设置</button>
@@ -39,19 +39,29 @@
         
         <div v-if="currentView === 'collections'" class="content-section">
           <h3>我的收藏</h3>
-          <div v-if="myCollections.length === 0" class="empty-state">
+          <!-- 类型筛选 -->
+          <div class="type-filter">
+            <button @click="collectionType = 'all'" :class="{ active: collectionType === 'all' }">全部</button>
+            <button @click="collectionType = 'article'" :class="{ active: collectionType === 'article' }">文章</button>
+            <button @click="collectionType = 'forum'" :class="{ active: collectionType === 'forum' }">论坛</button>
+          </div>
+          <div v-if="allCollections.length === 0" class="empty-state">
             <p>暂无收藏内容</p>
           </div>
           <div v-else class="collection-list">
-            <div v-for="item in myCollections" :key="item.id" class="collection-item" @click="goToArticle(item.id)">
+            <div v-for="item in allCollections" :key="item.uniqueId" class="collection-item" @click="goToItem(item)">
+              <span class="type-badge" :class="item.type">{{ item.type === 'forum' ? '论坛' : '文章' }}</span>
               <div class="collection-info">
                 <h4>{{ item.title }}</h4>
                 <p>{{ item.summary }}</p>
                 <div class="collection-meta">
-                  <span class="collection-author">作者：{{ item.author }}</span>
+                  <span class="collection-author">{{ item.type === 'forum' ? '论坛帖子' : '文章' }}</span>
                   <span class="collection-date">{{ formatDate(item.date) }}</span>
                 </div>
               </div>
+            </div>
+            <div v-if="hasMoreCollections" class="load-more-section">
+              <button class="load-more-btn" @click="loadMoreCollections">加载更多</button>
             </div>
           </div>
         </div>
@@ -70,40 +80,64 @@
                 <span class="post-date">{{ formatDate(post.date) }}</span>
               </div>
             </div>
+            <div v-if="pagination.posts.hasMore" class="load-more-section">
+              <button class="load-more-btn" @click="loadMorePosts">加载更多</button>
+            </div>
           </div>
         </div>
 
         <div v-if="currentView === 'comments'" class="content-section">
           <h3>我的评论</h3>
-          <div v-if="myComments.length === 0" class="empty-state">
+          <!-- 类型筛选 -->
+          <div class="type-filter">
+            <button @click="commentType = 'all'" :class="{ active: commentType === 'all' }">全部</button>
+            <button @click="commentType = 'article'" :class="{ active: commentType === 'article' }">文章</button>
+            <button @click="commentType = 'forum'" :class="{ active: commentType === 'forum' }">论坛</button>
+          </div>
+          <div v-if="allComments.length === 0" class="empty-state">
             <p>暂无评论记录</p>
           </div>
           <div v-else class="comment-list">
-            <div v-for="comment in myComments" :key="comment.id" class="comment-item" @click="goToComment(comment.articleId, comment.id)">
-              <h4>{{ getArticleTitle(comment.articleId) }}</h4>
+            <div v-for="comment in allComments" :key="comment.uniqueId" class="comment-item" @click="goToCommentItem(comment)">
+              <span class="type-badge" :class="comment.type">{{ comment.type === 'forum' ? '论坛' : '文章' }}</span>
+              <h4>{{ comment.articleTitle }}</h4>
               <p class="comment-content">{{ comment.content }}</p>
               <div class="comment-meta">
+                <span class="comment-category" v-if="comment.category">{{ comment.category }}</span>
                 <span class="comment-date">{{ formatDate(comment.date) }}</span>
               </div>
+            </div>
+            <div v-if="hasMoreComments" class="load-more-section">
+              <button class="load-more-btn" @click="loadMoreComments">加载更多</button>
             </div>
           </div>
         </div>
 
         <div v-if="currentView === 'likes'" class="content-section">
           <h3>我的点赞</h3>
-          <div v-if="myLikes.length === 0" class="empty-state">
+          <!-- 类型筛选 -->
+          <div class="type-filter">
+            <button @click="likeType = 'all'" :class="{ active: likeType === 'all' }">全部</button>
+            <button @click="likeType = 'article'" :class="{ active: likeType === 'article' }">文章</button>
+            <button @click="likeType = 'forum'" :class="{ active: likeType === 'forum' }">论坛</button>
+          </div>
+          <div v-if="allLikes.length === 0" class="empty-state">
             <p>暂无点赞记录</p>
           </div>
           <div v-else class="like-list">
-            <div v-for="like in myLikes" :key="like.id" class="like-item" @click="goToArticle(like.id)">
+            <div v-for="like in allLikes" :key="like.uniqueId" class="like-item" @click="goToItem(like)">
+              <span class="type-badge" :class="like.type">{{ like.type === 'forum' ? '论坛' : '文章' }}</span>
               <div class="like-info">
                 <h4>{{ like.title }}</h4>
                 <p>{{ like.summary }}</p>
                 <div class="like-meta">
-                  <span class="like-author">作者：{{ like.author }}</span>
+                  <span class="like-author">{{ like.type === 'forum' ? '论坛帖子' : '文章' }}</span>
                   <span class="like-date">{{ formatDate(like.date) }}</span>
                 </div>
               </div>
+            </div>
+            <div v-if="hasMoreLikes" class="load-more-section">
+              <button class="load-more-btn" @click="loadMoreLikes">加载更多</button>
             </div>
           </div>
         </div>
@@ -311,6 +345,7 @@ import { uploadAvatar } from '@/api/upload'
 import { updateProfile, changePassword } from '@/api/users'
 import { getUserProfile, getUserFavorites, getUserLikes, getUserComments, getUserPosts } from '@/api/userCenter'
 import { getUserActivities } from '@/api/activities'
+import { getUserForumLikes, getUserForumFavorites, getUserForumComments } from '@/api/forum'
 // 统一数据源后，不再直接引入静态文章数据
 
 export default {
@@ -346,6 +381,24 @@ export default {
       myComments: [],
       myLikes: [],
       myActivities: [],
+      // 🆕 论坛数据
+      myForumLikes: [],
+      myForumFavorites: [],
+      myForumComments: [],
+      // 筛选类型
+      collectionType: 'all',  // all, article, forum
+      likeType: 'all',
+      commentType: 'all',
+      // 分页数据
+      pagination: {
+        collections: { page: 1, limit: 10, total: 0, pages: 0, hasMore: false },
+        posts: { page: 1, limit: 10, total: 0, pages: 0, hasMore: false },
+        comments: { page: 1, limit: 10, total: 0, pages: 0, hasMore: false },
+        likes: { page: 1, limit: 10, total: 0, pages: 0, hasMore: false },
+        forumLikes: { page: 1, limit: 10, total: 0, pages: 0, hasMore: false },
+        forumFavorites: { page: 1, limit: 10, total: 0, pages: 0, hasMore: false },
+        forumComments: { page: 1, limit: 10, total: 0, pages: 0, hasMore: false }
+      },
       account: {
         security: { passwordSet: false },
         mobile: '182****9635',
@@ -356,6 +409,61 @@ export default {
   },
   computed: {
     ...mapGetters(['userActivities', 'username', 'notifications']),
+    // 🆕 合并文章和论坛的收藏列表
+    allCollections() {
+      let items = []
+      if (this.collectionType === 'all' || this.collectionType === 'article') {
+        items = items.concat(this.myCollections)
+      }
+      if (this.collectionType === 'all' || this.collectionType === 'forum') {
+        items = items.concat(this.myForumFavorites)
+      }
+      return items.sort((a, b) => new Date(b.date) - new Date(a.date))
+    },
+    // 🆕 合并文章和论坛的点赞列表
+    allLikes() {
+      let items = []
+      if (this.likeType === 'all' || this.likeType === 'article') {
+        items = items.concat(this.myLikes)
+      }
+      if (this.likeType === 'all' || this.likeType === 'forum') {
+        items = items.concat(this.myForumLikes)
+      }
+      return items.sort((a, b) => new Date(b.date) - new Date(a.date))
+    },
+    // 🆕 合并文章和论坛的评论列表
+    allComments() {
+      let items = []
+      if (this.commentType === 'all' || this.commentType === 'article') {
+        items = items.concat(this.myComments)
+      }
+      if (this.commentType === 'all' || this.commentType === 'forum') {
+        items = items.concat(this.myForumComments)
+      }
+      return items.sort((a, b) => new Date(b.date) - new Date(a.date))
+    },
+    // 🆕 总数统计
+    totalCollections() {
+      return this.myCollections.length + this.myForumFavorites.length
+    },
+    totalLikes() {
+      return this.myLikes.length + this.myForumLikes.length
+    },
+    totalComments() {
+      return this.myComments.length + this.myForumComments.length
+    },
+    hasMoreCollections() {
+      return (this.collectionType === 'all' || this.collectionType === 'article') && this.pagination.collections.hasMore ||
+             (this.collectionType === 'all' || this.collectionType === 'forum') && this.pagination.forumFavorites.hasMore
+    },
+    hasMoreLikes() {
+      return (this.likeType === 'all' || this.likeType === 'article') && this.pagination.likes.hasMore ||
+             (this.likeType === 'all' || this.likeType === 'forum') && this.pagination.forumLikes.hasMore
+    },
+    hasMoreComments() {
+      return (this.commentType === 'all' || this.commentType === 'article') && this.pagination.comments.hasMore ||
+             (this.commentType === 'all' || this.commentType === 'forum') && this.pagination.forumComments.hasMore
+    },
     userInfo() {
       const profile = this.userProfile
       if (!profile) {
@@ -380,6 +488,13 @@ export default {
   async mounted() {
     await this.loadUserData()
     this.initEditForm()
+    
+    // 监听用户数据变化事件
+    this.$root.$on('userDataChanged', this.handleUserDataChanged)
+  },
+  beforeDestroy() {
+    // 移除事件监听器
+    this.$root.$off('userDataChanged', this.handleUserDataChanged)
   },
   methods: {
     // 加载用户数据
@@ -394,14 +509,17 @@ export default {
           return
         }
         
-          // 并行加载所有用户数据
-          const [profileRes, favoritesRes, likesRes, commentsRes, postsRes, activitiesRes] = await Promise.all([
+          // 并行加载所有用户数据（文章+论坛）
+          const [profileRes, favoritesRes, likesRes, commentsRes, postsRes, activitiesRes, forumLikesRes, forumFavoritesRes, forumCommentsRes] = await Promise.all([
             getUserProfile().catch(err => ({ data: { success: false, error: err.message } })),
             getUserFavorites().catch(err => ({ data: { success: false, error: err.message } })),
             getUserLikes().catch(err => ({ data: { success: false, error: err.message } })),
             getUserComments().catch(err => ({ data: { success: false, error: err.message } })),
             getUserPosts().catch(err => ({ data: { success: false, error: err.message } })),
-            getUserActivities().catch(err => ({ data: { success: false, error: err.message } }))
+            getUserActivities().catch(err => ({ data: { success: false, error: err.message } })),
+            getUserForumLikes().catch(err => ({ data: { success: false, error: err.message } })),
+            getUserForumFavorites().catch(err => ({ data: { success: false, error: err.message } })),
+            getUserForumComments().catch(err => ({ data: { success: false, error: err.message } }))
           ])
         
         // 处理用户信息
@@ -413,32 +531,117 @@ export default {
         if (favoritesRes.data.success) {
           this.myCollections = favoritesRes.data.data.favorites.map(item => ({
             id: item.id,
+            uniqueId: 'article-' + item.id,
             title: item.title,
             summary: item.content ? item.content.substring(0, 100) + '...' : '暂无摘要',
             author: '系统',
-            date: item.favorited_at || item.created_at
+            date: item.favorited_at || item.created_at,
+            type: 'article'
           }))
+          if (favoritesRes.data.data.pagination) {
+            this.pagination.collections = {
+              ...favoritesRes.data.data.pagination,
+              hasMore: favoritesRes.data.data.pagination.page < favoritesRes.data.data.pagination.pages
+            }
+          }
         }
         
         // 处理点赞数据
         if (likesRes.data.success) {
           this.myLikes = likesRes.data.data.likes.map(item => ({
             id: item.id,
+            uniqueId: 'article-' + item.id,
             title: item.title,
             summary: item.content ? item.content.substring(0, 100) + '...' : '暂无摘要',
             author: '系统',
-            date: item.liked_at || item.created_at
+            date: item.liked_at || item.created_at,
+            type: 'article'
           }))
+          if (likesRes.data.data.pagination) {
+            this.pagination.likes = {
+              ...likesRes.data.data.pagination,
+              hasMore: likesRes.data.data.pagination.page < likesRes.data.data.pagination.pages
+            }
+          }
         }
         
         // 处理评论数据
         if (commentsRes.data.success) {
           this.myComments = commentsRes.data.data.comments.map(item => ({
             id: item.id,
+            uniqueId: 'article-comment-' + item.id,
             articleId: item.article_id,
+            articleTitle: item.article_title || '未知文章',
             content: item.content,
-            date: item.created_at
+            date: item.created_at,
+            category: item.category,
+            cover: item.cover,
+            type: 'article'
           }))
+          if (commentsRes.data.data.pagination) {
+            this.pagination.comments = {
+              ...commentsRes.data.data.pagination,
+              hasMore: commentsRes.data.data.pagination.page < commentsRes.data.data.pagination.pages
+            }
+          }
+        }
+        
+        // 🆕 处理论坛点赞数据
+        if (forumLikesRes.data.success) {
+          this.myForumLikes = forumLikesRes.data.data.likes.map(item => ({
+            id: item.id,
+            uniqueId: 'forum-' + item.id,
+            title: item.title,
+            summary: item.content ? item.content.substring(0, 100) + '...' : '暂无摘要',
+            author: '论坛',
+            date: item.liked_at || item.created_at,
+            type: 'forum'
+          }))
+          if (forumLikesRes.data.data.pagination) {
+            this.pagination.forumLikes = {
+              ...forumLikesRes.data.data.pagination,
+              hasMore: forumLikesRes.data.data.pagination.page < forumLikesRes.data.data.pagination.pages
+            }
+          }
+        }
+        
+        // 🆕 处理论坛收藏数据
+        if (forumFavoritesRes.data.success) {
+          this.myForumFavorites = forumFavoritesRes.data.data.favorites.map(item => ({
+            id: item.id,
+            uniqueId: 'forum-' + item.id,
+            title: item.title,
+            summary: item.content ? item.content.substring(0, 100) + '...' : '暂无摘要',
+            author: '论坛',
+            date: item.favorited_at || item.created_at,
+            type: 'forum'
+          }))
+          if (forumFavoritesRes.data.data.pagination) {
+            this.pagination.forumFavorites = {
+              ...forumFavoritesRes.data.data.pagination,
+              hasMore: forumFavoritesRes.data.data.pagination.page < forumFavoritesRes.data.data.pagination.pages
+            }
+          }
+        }
+        
+        // 🆕 处理论坛评论数据
+        if (forumCommentsRes.data.success) {
+          this.myForumComments = forumCommentsRes.data.data.comments.map(item => ({
+            id: item.id,
+            uniqueId: 'forum-comment-' + item.id,
+            articleId: item.post_id,
+            articleTitle: item.post_title || '未知帖子',
+            content: item.content,
+            date: item.created_at,
+            category: item.category,
+            type: 'forum'
+          }))
+          if (forumCommentsRes.data.data.pagination) {
+            this.pagination.forumComments = {
+              ...forumCommentsRes.data.data.pagination,
+              hasMore: forumCommentsRes.data.data.pagination.page < forumCommentsRes.data.data.pagination.pages
+            }
+          }
         }
         
         // 处理帖子数据
@@ -450,6 +653,12 @@ export default {
             tags: [item.category || '未分类'],
             date: item.created_at
           }))
+          if (postsRes.data.data.pagination) {
+            this.pagination.posts = {
+              ...postsRes.data.data.pagination,
+              hasMore: postsRes.data.data.pagination.page < postsRes.data.data.pagination.pages
+            }
+          }
         }
         
         // 处理活动数据
@@ -539,7 +748,7 @@ export default {
     getArticleTitle(articleId) {
       // 从评论数据中查找文章标题
       const comment = this.myComments.find(c => c.articleId === articleId)
-      return comment ? `文章ID: ${articleId}` : '未知文章'
+      return comment && comment.articleTitle ? comment.articleTitle : '未知文章'
     },
     goToArticle(articleId) {
       this.$router.push({ name: 'article-detail', params: { id: articleId } })
@@ -550,6 +759,30 @@ export default {
         params: { id: articleId },
         query: { highlight: commentId }
       })
+    },
+    // 🆕 根据类型跳转到文章或论坛
+    goToItem(item) {
+      if (item.type === 'forum') {
+        this.$router.push({ name: 'forum-post-detail', params: { id: item.id } })
+      } else {
+        this.$router.push({ name: 'article-detail', params: { id: item.id } })
+      }
+    },
+    // 🆕 根据类型跳转到评论
+    goToCommentItem(comment) {
+      if (comment.type === 'forum') {
+        this.$router.push({ 
+          name: 'forum-post-detail', 
+          params: { id: comment.articleId },
+          query: { highlight: comment.id }
+        })
+      } else {
+        this.$router.push({ 
+          name: 'article-detail', 
+          params: { id: comment.articleId },
+          query: { highlight: comment.id }
+        })
+      }
     },
     openNotification(n) {
       if (n.targetType === 'article') {
@@ -721,6 +954,280 @@ export default {
         alert('密码修改失败：' + (error.response?.data?.message || error.message || '未知错误'))
       } finally {
         this.changingPassword = false
+      }
+    },
+    
+    // 加载更多收藏
+    async loadMoreCollections() {
+      try {
+        this.pagination.collections.page++
+        const response = await getUserFavorites(this.pagination.collections.page, this.pagination.collections.limit)
+        
+        if (response.data.success) {
+          const newItems = response.data.data.favorites.map(item => ({
+            id: item.id,
+            title: item.title,
+            summary: item.content ? item.content.substring(0, 100) + '...' : '暂无摘要',
+            author: '系统',
+            date: item.favorited_at || item.created_at
+          }))
+          this.myCollections = [...this.myCollections, ...newItems]
+          
+          if (response.data.data.pagination) {
+            this.pagination.collections = {
+              ...response.data.data.pagination,
+              hasMore: response.data.data.pagination.page < response.data.data.pagination.pages
+            }
+          }
+        }
+      } catch (error) {
+        console.error('加载更多收藏失败:', error)
+      }
+    },
+    
+    // 加载更多点赞
+    async loadMoreLikes() {
+      try {
+        this.pagination.likes.page++
+        const response = await getUserLikes(this.pagination.likes.page, this.pagination.likes.limit)
+        
+        if (response.data.success) {
+          const newItems = response.data.data.likes.map(item => ({
+            id: item.id,
+            title: item.title,
+            summary: item.content ? item.content.substring(0, 100) + '...' : '暂无摘要',
+            author: '系统',
+            date: item.liked_at || item.created_at
+          }))
+          this.myLikes = [...this.myLikes, ...newItems]
+          
+          if (response.data.data.pagination) {
+            this.pagination.likes = {
+              ...response.data.data.pagination,
+              hasMore: response.data.data.pagination.page < response.data.data.pagination.pages
+            }
+          }
+        }
+      } catch (error) {
+        console.error('加载更多点赞失败:', error)
+      }
+    },
+    
+    // 加载更多评论
+    async loadMoreComments() {
+      try {
+        this.pagination.comments.page++
+        const response = await getUserComments(this.pagination.comments.page, this.pagination.comments.limit)
+        
+        if (response.data.success) {
+          const newItems = response.data.data.comments.map(item => ({
+            id: item.id,
+            articleId: item.article_id,
+            articleTitle: item.article_title || '未知文章',
+            content: item.content,
+            date: item.created_at,
+            category: item.category,
+            cover: item.cover
+          }))
+          this.myComments = [...this.myComments, ...newItems]
+          
+          if (response.data.data.pagination) {
+            this.pagination.comments = {
+              ...response.data.data.pagination,
+              hasMore: response.data.data.pagination.page < response.data.data.pagination.pages
+            }
+          }
+        }
+      } catch (error) {
+        console.error('加载更多评论失败:', error)
+      }
+    },
+    
+    // 加载更多帖子
+    async loadMorePosts() {
+      try {
+        this.pagination.posts.page++
+        const response = await getUserPosts(this.pagination.posts.page, this.pagination.posts.limit)
+        
+        if (response.data.success) {
+          const newItems = response.data.data.posts.map(item => ({
+            id: item.id,
+            title: item.title,
+            summary: item.content ? item.content.substring(0, 100) + '...' : '暂无摘要',
+            tags: [item.category || '未分类'],
+            date: item.created_at
+          }))
+          this.myPosts = [...this.myPosts, ...newItems]
+          
+          if (response.data.data.pagination) {
+            this.pagination.posts = {
+              ...response.data.data.pagination,
+              hasMore: response.data.data.pagination.page < response.data.data.pagination.pages
+            }
+          }
+        }
+      } catch (error) {
+        console.error('加载更多帖子失败:', error)
+      }
+    },
+    
+    // 处理用户数据变化事件
+    handleUserDataChanged(data) {
+      console.log('用户数据已更新:', data)
+      // 根据数据类型刷新对应的数据
+      if (data.type === 'like') {
+        this.refreshData('likes')
+      } else if (data.type === 'favorite') {
+        this.refreshData('collections')
+      } else if (data.type === 'comment') {
+        this.refreshData('comments')
+      } else if (data.type === 'forum-like') {
+        this.refreshData('forum-likes')
+      } else if (data.type === 'forum-favorite') {
+        this.refreshData('forum-favorites')
+      } else if (data.type === 'forum-comment') {
+        this.refreshData('forum-comments')
+      }
+    },
+    
+    // 刷新单个数据类型
+    async refreshData(type) {
+      try {
+        this.loading = true
+        
+        if (type === 'forum-likes') {
+          const response = await getUserForumLikes(1, this.pagination.forumLikes.limit)
+          if (response.data.success) {
+            this.myForumLikes = response.data.data.likes.map(item => ({
+              id: item.id,
+              uniqueId: 'forum-' + item.id,
+              title: item.title,
+              summary: item.content ? item.content.substring(0, 100) + '...' : '暂无摘要',
+              author: '论坛',
+              date: item.liked_at || item.created_at,
+              type: 'forum'
+            }))
+            if (response.data.data.pagination) {
+              this.pagination.forumLikes = {
+                ...response.data.data.pagination,
+                hasMore: response.data.data.pagination.page < response.data.data.pagination.pages
+              }
+            }
+          }
+        } else if (type === 'forum-favorites') {
+          const response = await getUserForumFavorites(1, this.pagination.forumFavorites.limit)
+          if (response.data.success) {
+            this.myForumFavorites = response.data.data.favorites.map(item => ({
+              id: item.id,
+              uniqueId: 'forum-' + item.id,
+              title: item.title,
+              summary: item.content ? item.content.substring(0, 100) + '...' : '暂无摘要',
+              author: '论坛',
+              date: item.favorited_at || item.created_at,
+              type: 'forum'
+            }))
+            if (response.data.data.pagination) {
+              this.pagination.forumFavorites = {
+                ...response.data.data.pagination,
+                hasMore: response.data.data.pagination.page < response.data.data.pagination.pages
+              }
+            }
+          }
+        } else if (type === 'forum-comments') {
+          const response = await getUserForumComments(1, this.pagination.forumComments.limit)
+          if (response.data.success) {
+            this.myForumComments = response.data.data.comments.map(item => ({
+              id: item.id,
+              uniqueId: 'forum-comment-' + item.id,
+              articleId: item.post_id,
+              articleTitle: item.post_title || '未知帖子',
+              content: item.content,
+              date: item.created_at,
+              category: item.category,
+              type: 'forum'
+            }))
+            if (response.data.data.pagination) {
+              this.pagination.forumComments = {
+                ...response.data.data.pagination,
+                hasMore: response.data.data.pagination.page < response.data.data.pagination.pages
+              }
+            }
+          }
+        } else if (type === 'collections') {
+          const response = await getUserFavorites(1, this.pagination.collections.limit)
+          if (response.data.success) {
+            this.myCollections = response.data.data.favorites.map(item => ({
+              id: item.id,
+              title: item.title,
+              summary: item.content ? item.content.substring(0, 100) + '...' : '暂无摘要',
+              author: '系统',
+              date: item.favorited_at || item.created_at
+            }))
+            if (response.data.data.pagination) {
+              this.pagination.collections = {
+                ...response.data.data.pagination,
+                hasMore: response.data.data.pagination.page < response.data.data.pagination.pages
+              }
+            }
+          }
+        } else if (type === 'likes') {
+          const response = await getUserLikes(1, this.pagination.likes.limit)
+          if (response.data.success) {
+            this.myLikes = response.data.data.likes.map(item => ({
+              id: item.id,
+              title: item.title,
+              summary: item.content ? item.content.substring(0, 100) + '...' : '暂无摘要',
+              author: '系统',
+              date: item.liked_at || item.created_at
+            }))
+            if (response.data.data.pagination) {
+              this.pagination.likes = {
+                ...response.data.data.pagination,
+                hasMore: response.data.data.pagination.page < response.data.data.pagination.pages
+              }
+            }
+          }
+        } else if (type === 'comments') {
+          const response = await getUserComments(1, this.pagination.comments.limit)
+          if (response.data.success) {
+            this.myComments = response.data.data.comments.map(item => ({
+              id: item.id,
+              articleId: item.article_id,
+              articleTitle: item.article_title || '未知文章',
+              content: item.content,
+              date: item.created_at,
+              category: item.category,
+              cover: item.cover
+            }))
+            if (response.data.data.pagination) {
+              this.pagination.comments = {
+                ...response.data.data.pagination,
+                hasMore: response.data.data.pagination.page < response.data.data.pagination.pages
+              }
+            }
+          }
+        } else if (type === 'posts') {
+          const response = await getUserPosts(1, this.pagination.posts.limit)
+          if (response.data.success) {
+            this.myPosts = response.data.data.posts.map(item => ({
+              id: item.id,
+              title: item.title,
+              summary: item.content ? item.content.substring(0, 100) + '...' : '暂无摘要',
+              tags: [item.category || '未分类'],
+              date: item.created_at
+            }))
+            if (response.data.data.pagination) {
+              this.pagination.posts = {
+                ...response.data.data.pagination,
+                hasMore: response.data.data.pagination.page < response.data.data.pagination.pages
+              }
+            }
+          }
+        }
+      } catch (error) {
+        console.error('刷新数据失败:', error)
+      } finally {
+        this.loading = false
       }
     }
   }
@@ -995,6 +1502,15 @@ export default {
 .comment-date {
   color: #909399;
   font-size: 12px;
+}
+
+.comment-category {
+  background: #f0f2f5;
+  color: #606266;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  margin-right: 8px;
 }
 
 /* 点赞列表 */
@@ -1399,6 +1915,85 @@ input:checked + .slider:before {
 .account-action { padding: 6px 12px; border: 1px solid #dcdfe6; background: #fff; border-radius: 4px; cursor: pointer; }
 .account-action.danger { border-color: #dc3545; color: #dc3545; }
 .account-action:hover { background: #f2f3f5; }
+
+/* 加载更多按钮 */
+.load-more-section {
+  text-align: center;
+  padding: 20px 0;
+}
+
+.load-more-btn {
+  background: #f5f7fa;
+  border: 1px solid #dcdfe6;
+  color: #606266;
+  padding: 10px 30px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.2s ease;
+}
+
+.load-more-btn:hover {
+  background: #e6e9ef;
+  border-color: #42b983;
+  color: #42b983;
+}
+
+.load-more-btn:active {
+  transform: scale(0.98);
+}
+
+/* 类型筛选按钮 */
+.type-filter {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.type-filter button {
+  padding: 8px 16px;
+  border: 1px solid #dcdfe6;
+  background: #f5f7fa;
+  color: #606266;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.2s ease;
+}
+
+.type-filter button:hover {
+  background: #e6e9ef;
+  border-color: #42b983;
+  color: #42b983;
+}
+
+.type-filter button.active {
+  background: #42b983;
+  border-color: #42b983;
+  color: white;
+}
+
+/* 类型徽章 */
+.type-badge {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  margin-right: 12px;
+}
+
+.type-badge.article {
+  background: #e1f3f8;
+  color: #0288d1;
+}
+
+.type-badge.forum {
+  background: #fff3e0;
+  color: #f57c00;
+}
 
 </style>
 

@@ -29,3 +29,4 @@ FROM articles a
 LEFT JOIN hotarticles h ON a.id = h.article_id AND h.status = 'active'
 ORDER BY a.id;
 
+

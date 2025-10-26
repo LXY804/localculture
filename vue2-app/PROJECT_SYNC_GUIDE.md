@@ -186,3 +186,4 @@ mysql -u root -p localculture < sql/fix-articles-data.sql
 
 **注意：** 每次同步代码后，如果 `sql/` 目录有更新，记得重新运行相关的SQL脚本！
 
+
