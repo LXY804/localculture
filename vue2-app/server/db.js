@@ -5,7 +5,7 @@ const pool = mysql.createPool({
   host: process.env.DB_HOST || '127.0.0.1',
   port: Number(process.env.DB_PORT || 3306),
   user: process.env.DB_USER || 'root',
-  password: process.env.DB_PASSWORD || '20051125wjw',
+  password: process.env.DB_PASSWORD || '', // ⚠️ 请在 .env 文件中设置密码
   database: process.env.DB_NAME || 'localculture',
   waitForConnections: true,
   connectionLimit: 10,

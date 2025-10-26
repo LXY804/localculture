@@ -28,11 +28,28 @@ echo.
 echo [3/6] 检查 .env 配置...
 if not exist .env (
     echo ⚠️  .env 文件不存在，正在创建...
-    copy .env.example .env >nul 2>&1
-    echo ⚠️  请编辑 .env 文件，设置数据库密码！
+    (
+        echo # 数据库配置
+        echo DB_HOST=localhost
+        echo DB_USER=root
+        echo DB_PASSWORD=你的MySQL密码
+        echo DB_NAME=localculture
+        echo DB_PORT=3306
+        echo.
+        echo # 服务器配置
+        echo PORT=3001
+        echo.
+        echo # JWT配置
+        echo JWT_SECRET=localculture_secret_2025
+    ) > .env
+    echo ✅ .env 文件已创建
+    echo ⚠️  重要：请编辑 .env 文件，将 DB_PASSWORD 改成你的MySQL密码！
+    echo.
     pause
+) else (
+    echo ✅ .env 文件已存在
 )
-echo ✅ .env 文件存在
+
 
 echo.
 echo [4/6] 创建 public/assets 目录...
@@ -88,9 +105,9 @@ echo   4. 访问 http://localhost:8080
 echo   5. 使用测试账号登录: user / password
 echo.
 echo 📖 详细文档：
-echo   - 快速开始: QUICK_FIX_SUMMARY.md
-echo   - 完整指南: INTERACTION_SYSTEM_GUIDE.md
-echo   - 工作总结: WORK_COMPLETED_SUMMARY.md
+echo   - 快速开始: QUICK_SETUP.md
+echo   - 功能指南: INTERACTION_SYSTEM_GUIDE.md
+echo   - 协作指南: COLLABORATION_GUIDE.md
 echo.
 echo ============================================
 pause
