@@ -1,3 +1,5 @@
+import { getDashboardStats, getUserGrowth } from '@/api/dashboard'
+
 const state = {
   stats: {
     totalAnnouncements: 0,
@@ -41,7 +43,36 @@ const mutations = {
 
 const actions = {
   async fetchDashboardData({ commit, dispatch, rootState }) {
-    // 确保基础数据已加载
+    try {
+      // 从API获取统计数据（如果已登录且是管理员）
+      const user = rootState.user?.currentUser
+      if (user && user.role === 'admin') {
+        try {
+          const statsRes = await getDashboardStats()
+          if (statsRes.data) {
+            commit('SET_STATS', {
+              totalUsers: statsRes.data.totalUsers || 0,
+              totalArticles: statsRes.data.totalArticles || 0,
+              totalAnnouncements: statsRes.data.totalAnnouncements || 0,
+              dailyVisits: statsRes.data.dailyVisits || 0
+            })
+          }
+        } catch (error) {
+          console.warn('获取统计数据API失败，使用fallback方式:', error)
+          // 如果API失败，使用fallback方式
+          await dispatch('fetchDashboardDataFallback')
+        }
+      } else {
+        // 非管理员用户，使用fallback方式
+        await dispatch('fetchDashboardDataFallback')
+      }
+    } catch (error) {
+      console.error('获取dashboard数据失败:', error)
+      // 出错时使用fallback方式
+      await dispatch('fetchDashboardDataFallback')
+    }
+
+    // 确保基础数据已加载（用于图表和通知）
     if (!rootState.articles || (rootState.articles.list || []).length === 0) {
       await dispatch('articles/fetchArticles', null, { root: true })
     }
@@ -51,16 +82,6 @@ const actions = {
 
     const articles = (rootState.articles && rootState.articles.list) || []
     const announcements = (rootState.announcements && rootState.announcements.list) || []
-    const totalUsers = (rootState.users && rootState.users.list && rootState.users.list.length) || 0
-    const dailyVisits = Math.round(500 + Math.random() * 1200)
-
-    // 统计
-    commit('SET_STATS', {
-      totalAnnouncements: announcements.length,
-      totalArticles: articles.length,
-      totalUsers,
-      dailyVisits
-    })
 
     // 图表：公告发布趋势（按日期聚合）
     const fmtDate = (dt) => {
@@ -76,13 +97,28 @@ const actions = {
     })
     const announcementTrends = Object.keys(trendMap).sort().map(date => ({ date, count: trendMap[date] }))
 
-    // 图表：用户增长（示意：最近7天随机）
-    const today = new Date()
-    const userGrowth = Array.from({ length: 7 }).map((_, idx) => {
-      const d = new Date(today.getFullYear(), today.getMonth(), today.getDate() - (6 - idx))
-      const p = (n) => String(n).padStart(2, '0')
-      return { date: `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`, count: Math.round(5 + Math.random() * 20) }
-    })
+    // 图表：用户增长（从API获取真实数据）
+    let userGrowth = []
+    try {
+      if (user && user.role === 'admin') {
+        const growthRes = await getUserGrowth(7)
+        if (growthRes.data && Array.isArray(growthRes.data)) {
+          userGrowth = growthRes.data
+        }
+      }
+    } catch (error) {
+      console.warn('获取用户增长趋势失败，使用空数据:', error)
+    }
+    
+    // 如果API失败，使用空数据（而不是随机数据）
+    if (userGrowth.length === 0) {
+      const today = new Date()
+      userGrowth = Array.from({ length: 7 }).map((_, idx) => {
+        const d = new Date(today.getFullYear(), today.getMonth(), today.getDate() - (6 - idx))
+        const p = (n) => String(n).padStart(2, '0')
+        return { date: `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`, count: 0 }
+      })
+    }
 
     // 图表：阅读排行榜（按 views 降序取前5）
     const readingRankings = [...articles]
@@ -114,6 +150,41 @@ const actions = {
     ]
     commit('SET_NOTIFICATIONS', notifications)
     commit('SET_TODOS', todos)
+  },
+  
+  // Fallback方式：从其他store获取数据计算统计
+  async fetchDashboardDataFallback({ commit, dispatch, rootState }) {
+    // 确保基础数据已加载
+    if (!rootState.articles || (rootState.articles.list || []).length === 0) {
+      await dispatch('articles/fetchArticles', null, { root: true })
+    }
+    if (!rootState.announcements || (rootState.announcements.list || []).length === 0) {
+      await dispatch('announcements/fetchAnnouncements', null, { root: true })
+    }
+    // 尝试加载用户列表（如果是管理员）
+    const user = rootState.user?.currentUser
+    if (user && user.role === 'admin') {
+      try {
+        if (!rootState.users || (rootState.users.list || []).length === 0) {
+          await dispatch('users/fetchUsers', null, { root: true })
+        }
+      } catch (error) {
+        console.warn('加载用户列表失败:', error)
+      }
+    }
+
+    const articles = (rootState.articles && rootState.articles.list) || []
+    const announcements = (rootState.announcements && rootState.announcements.list) || []
+    const totalUsers = (rootState.users && rootState.users.list && rootState.users.list.length) || 0
+    const dailyVisits = Math.round(500 + Math.random() * 1200)
+
+    // 统计
+    commit('SET_STATS', {
+      totalAnnouncements: announcements.length,
+      totalArticles: articles.length,
+      totalUsers,
+      dailyVisits
+    })
   },
   
   addNotification({ commit }, notification) {

@@ -1,3 +1,12 @@
+import { 
+  getUserList, 
+  getUserDetail, 
+  createUser as createUserAPI, 
+  updateUser as updateUserAPI, 
+  deleteUser as deleteUserAPI, 
+  updateUserStatus as updateUserStatusAPI 
+} from '@/api/users'
+
 const state = {
   list: [],
   detail: null,
@@ -46,181 +55,99 @@ const mutations = {
 }
 
 const actions = {
-  async fetchUsers({ commit }) {
+  async fetchUsers({ commit }, params = {}) {
     commit('SET_LOADING', true)
-    
-    // 模拟API调用
-    const mockData = [
-      {
-        id: 1,
-        username: 'admin',
-        email: 'admin@example.com',
-        phone: '13800000000',
-        role: 'admin',
-        status: 'active',
-        avatar: '/assets/logo.png',
-        createTime: '2024-01-01 00:00:00',
-        lastLoginTime: '2024-01-07 14:30:00',
-        loginCount: 156,
-        profile: {
-          realName: '系统管理员',
-          gender: 'male',
-          birthday: '1990-01-01',
-          address: '北京市朝阳区',
-          bio: '系统管理员，负责平台日常维护和管理工作'
-        }
-      },
-      {
-        id: 2,
-        username: 'editor01',
-        email: 'editor01@example.com',
-        phone: '13800000001',
-        role: 'editor',
-        status: 'active',
-        avatar: '/assets/logo.png',
-        createTime: '2024-01-02 10:00:00',
-        lastLoginTime: '2024-01-07 09:15:00',
-        loginCount: 89,
-        profile: {
-          realName: '编辑员01',
-          gender: 'female',
-          birthday: '1992-05-15',
-          address: '上海市浦东新区',
-          bio: '内容编辑，负责文章审核和发布'
-        }
-      },
-      {
-        id: 3,
-        username: 'user001',
-        email: 'user001@example.com',
-        phone: '13800000002',
-        role: 'user',
-        status: 'active',
-        avatar: '/assets/logo.png',
-        createTime: '2024-01-03 14:20:00',
-        lastLoginTime: '2024-01-06 16:45:00',
-        loginCount: 45,
-        profile: {
-          realName: '普通用户001',
-          gender: 'male',
-          birthday: '1988-12-10',
-          address: '广州市天河区',
-          bio: '传统文化爱好者，喜欢阅读和分享相关文章'
-        }
-      },
-      {
-        id: 4,
-        username: 'user002',
-        email: 'user002@example.com',
-        phone: '13800000003',
-        role: 'user',
-        status: 'inactive',
-        avatar: '/assets/logo.png',
-        createTime: '2024-01-04 11:30:00',
-        lastLoginTime: '2024-01-05 08:20:00',
-        loginCount: 12,
-        profile: {
-          realName: '普通用户002',
-          gender: 'female',
-          birthday: '1995-03-22',
-          address: '深圳市南山区',
-          bio: '新注册用户，正在探索平台功能'
-        }
-      }
-    ]
-    
-    setTimeout(() => {
-      commit('SET_LIST', mockData)
-      commit('SET_PAGINATION', { total: mockData.length })
+    try {
+      const res = await getUserList(params)
+      const data = res.data.data || res.data || []
+      commit('SET_LIST', data)
+      commit('SET_PAGINATION', {
+        total: res.data.total || data.length,
+        current: res.data.page || params.page || 1,
+        pageSize: res.data.pageSize || params.pageSize || 20
+      })
+    } catch (error) {
+      console.error('获取用户列表失败:', error)
+      commit('SET_LIST', [])
+      throw error
+    } finally {
       commit('SET_LOADING', false)
-    }, 500)
+    }
   },
   
   async fetchUserDetail({ commit }, id) {
     commit('SET_LOADING', true)
-    
-    // 模拟API调用
-    const mockDetail = {
-      id: parseInt(id),
-      username: 'admin',
-      email: 'admin@example.com',
-      phone: '13800000000',
-      role: 'admin',
-      status: 'active',
-      avatar: '/assets/logo.png',
-      createTime: '2024-01-01 00:00:00',
-      lastLoginTime: '2024-01-07 14:30:00',
-      loginCount: 156,
-      profile: {
-        realName: '系统管理员',
-        gender: 'male',
-        birthday: '1990-01-01',
-        address: '北京市朝阳区',
-        bio: '系统管理员，负责平台日常维护和管理工作',
-        website: 'https://example.com',
-        social: {
-          wechat: 'admin_wechat',
-          qq: '123456789',
-          weibo: '@admin_weibo'
-        }
-      },
-      permissions: ['all'],
-      activityLog: [
-        {
-          id: 1,
-          action: '登录系统',
-          time: '2024-01-07 14:30:00',
-          ip: '192.168.1.100'
-        },
-        {
-          id: 2,
-          action: '发布公告',
-          time: '2024-01-07 14:25:00',
-          ip: '192.168.1.100'
-        },
-        {
-          id: 3,
-          action: '审核文章',
-          time: '2024-01-07 14:20:00',
-          ip: '192.168.1.100'
-        }
-      ]
-    }
-    
-    setTimeout(() => {
-      commit('SET_DETAIL', mockDetail)
+    try {
+      const res = await getUserDetail(id)
+      commit('SET_DETAIL', res.data)
+      return res.data
+    } catch (error) {
+      console.error('获取用户详情失败:', error)
+      throw error
+    } finally {
       commit('SET_LOADING', false)
-    }, 300)
-  },
-  
-  async createUser({ commit }, userData) {
-    const newUser = {
-      id: Date.now(),
-      ...userData,
-      createTime: new Date().toLocaleString(),
-      lastLoginTime: null,
-      loginCount: 0,
-      status: 'active'
     }
-    
-    commit('ADD_USER', newUser)
-    return newUser
   },
   
-  async updateUser({ commit }, userData) {
-    commit('UPDATE_USER', userData)
-    return userData
+  async createUser({ commit, dispatch }, userData) {
+    commit('SET_LOADING', true)
+    try {
+      const res = await createUserAPI(userData)
+      // 重新获取列表以保持数据同步
+      await dispatch('fetchUsers')
+      return res.data
+    } catch (error) {
+      console.error('创建用户失败:', error)
+      throw error
+    } finally {
+      commit('SET_LOADING', false)
+    }
   },
   
-  async deleteUser({ commit }, id) {
-    commit('DELETE_USER', id)
+  async updateUser({ commit, dispatch }, userData) {
+    commit('SET_LOADING', true)
+    try {
+      const { id, ...data } = userData
+      const res = await updateUserAPI(id, data)
+      commit('UPDATE_USER', res.data)
+      // 重新获取列表以保持数据同步
+      await dispatch('fetchUsers')
+      return res.data
+    } catch (error) {
+      console.error('更新用户失败:', error)
+      throw error
+    } finally {
+      commit('SET_LOADING', false)
+    }
   },
   
-  async updateUserStatus({ commit }, { id, status }) {
-    const user = state.list.find(u => u.id === id)
-    if (user) {
-      const updatedUser = { ...user, status }
-      commit('UPDATE_USER', updatedUser)
+  async deleteUser({ commit, dispatch }, id) {
+    commit('SET_LOADING', true)
+    try {
+      await deleteUserAPI(id)
+      commit('DELETE_USER', id)
+      // 重新获取列表以保持数据同步
+      await dispatch('fetchUsers')
+    } catch (error) {
+      console.error('删除用户失败:', error)
+      throw error
+    } finally {
+      commit('SET_LOADING', false)
+    }
+  },
+  
+  async updateUserStatus({ commit, dispatch }, { id, status }) {
+    commit('SET_LOADING', true)
+    try {
+      await updateUserStatusAPI(id, status)
+      commit('UPDATE_USER', { id, status })
+      // 重新获取列表以保持数据同步
+      await dispatch('fetchUsers')
+    } catch (error) {
+      console.error('更新用户状态失败:', error)
+      throw error
+    } finally {
+      commit('SET_LOADING', false)
     }
   }
 }
