@@ -3,7 +3,7 @@
     <!-- 侧边栏 -->
     <div class="sidebar" :class="{ collapsed: sidebarCollapsed }">
       <div class="sidebar-header">
-        <img src="/assets/logo.png" alt="Logo" class="logo">
+        <img :src="logoUrl" alt="Logo" class="logo" @error="handleLogoError">
         <span v-if="!sidebarCollapsed" class="logo-text">后台管理</span>
       </div>
       <el-menu
@@ -119,7 +119,8 @@ export default {
   name: 'AdminLayout',
   data() {
     return {
-      sidebarCollapsed: false
+      sidebarCollapsed: false,
+      logoError: false
     }
   },
   computed: {
@@ -131,6 +132,13 @@ export default {
     },
     userAvatar() {
       return this.$store.getters['settings/profile']?.avatar || '/assets/logo.png'
+    },
+    logoUrl() {
+      // 如果logo加载失败，使用一个默认的SVG图标作为占位符
+      if (this.logoError) {
+        return 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzIiIGhlaWdodD0iMzIiIHZpZXdCb3g9IjAgMCAzMiAzMiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMTYiIGN5PSIxNiIgcj0iMTYiIGZpbGw9IiM0MDlFRkYiLz4KPHBhdGggZD0iTTE2IDEwQzE3LjEgMTAgMTggMTAuOSAxOCAxMkMxOCAxMy4xIDE3LjEgMTQgMTYgMTRDMTQuOSAxNCAxNCAxMy4xIDE0IDEyQzE0IDEwLjkgMTQuOSAxMCAxNiAxMFoiIGZpbGw9IndoaXRlIi8+CjxwYXRoIGQ9Ik0xNiAxNkMxMyAyMiAxMiAyNCAxMiAyNkgxOEMxOCAyNCAxNyAyMiAxNiAxNloiIGZpbGw9IndoaXRlIi8+Cjwvc3ZnPgo='
+      }
+      return '/assets/logo.png'
     },
     breadcrumbs() {
       const path = this.$route.path
@@ -210,6 +218,11 @@ export default {
       
       // 其他情况直接返回
       return avatar
+    },
+    handleLogoError() {
+      // Logo加载失败时，设置标志位以显示占位符
+      console.warn('[AdminLayout] Logo加载失败，使用默认占位符')
+      this.logoError = true
     }
   }
 }
