@@ -1,7 +1,7 @@
-import axios from 'axios'
+import http from './http'
 
 export function getAnnouncements(role = 'user') {
-  return axios.get(`/mock/announcements.json?role=${role}`)
+  return http.get('/announcements', { params: { role } })
 }
 
 

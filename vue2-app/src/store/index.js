@@ -44,6 +44,11 @@ export default new Vuex.Store({
     isAuthenticated: (state) => !!state.authToken,
     currentRole: (state) => (state.userProfile && state.userProfile.role) || 'guest',
     username: (state) => (state.userProfile && state.userProfile.username) || '',
+    userProfile: (state) => state.userProfile,
+    displayName: (state) => {
+      if (!state.userProfile) return '匿名用户'
+      return state.userProfile.nickname || state.userProfile.phone || state.userProfile.username || '匿名用户'
+    },
     userActivities: (state) => state.userActivities,
     isLiked: (state) => (articleId) => state.userActivities.likes.includes(articleId),
     isFavorited: (state) => (articleId) => state.userActivities.favorites.includes(articleId),
@@ -59,6 +64,12 @@ export default new Vuex.Store({
       this.commit('user/setRole', (profile && profile.role) || 'user')
       if (typeof localStorage !== 'undefined') {
         localStorage.setItem('authToken', token || '')
+        localStorage.setItem('userProfile', profile ? JSON.stringify(profile) : '')
+      }
+    },
+    SET_USER_PROFILE(state, profile) {
+      state.userProfile = profile
+      if (typeof localStorage !== 'undefined') {
         localStorage.setItem('userProfile', profile ? JSON.stringify(profile) : '')
       }
     },
@@ -119,25 +130,83 @@ export default new Vuex.Store({
     },
   },
   actions: {
-    async loginWithPassword({ commit }, { phone, password }) {
-      void password; // 标记参数已使用，避免未使用告警
-      // 模拟登录：仅示例，真实应调用后端 API
-      const isAdmin = phone === '13800000000'
-      const token = 'mock-token-' + Date.now()
-      const profile = { id: 'u-' + Date.now(), username: phone, role: isAdmin ? 'admin' : 'user' }
-      commit('setAuth', { token, profile })
-      return { success: true, role: profile.role }
+    async loginWithPassword({ commit }, { username, password }) {
+      try {
+        console.log('Vuex: 开始登录请求', { username })
+        const { login } = await import('@/api/users')
+        console.log('Vuex: 导入API成功')
+        
+        const response = await login({ username, password })
+        console.log('Vuex: 收到响应', response)
+        
+        if (response.data.success) {
+          const { token, user } = response.data
+          console.log('Vuex: 登录成功，用户信息:', user)
+          
+          // 保存到 localStorage
+          localStorage.setItem('authToken', token)
+          localStorage.setItem('userProfile', JSON.stringify(user))
+          
+          // 更新 Vuex state
+          commit('setAuth', { token, profile: user })
+          
+          return { success: true, role: user.role }
+        } else {
+          console.error('Vuex: 登录失败，服务器返回:', response.data)
+          throw new Error(response.data.message || '登录失败')
+        }
+      } catch (error) {
+        console.error('Vuex: 登录异常:', error)
+        console.error('Vuex: 错误详情:', {
+          message: error.message,
+          status: error.response?.status,
+          data: error.response?.data,
+          config: error.config
+        })
+        throw error
+      }
     },
-    async registerWithPhone(context, { phone, password }) {
-      void context; void phone; void password; // 标记参数已使用，避免未使用告警
-      return true
+    
+    async registerWithPhone({ commit }, { username, nickname, phone, password }) {
+      try {
+        const { register } = await import('@/api/users')
+        const response = await register({ username, nickname, phone, password })
+        
+        if (response.data.success) {
+          const { token, user } = response.data
+          
+          // 保存到 localStorage
+          localStorage.setItem('authToken', token)
+          localStorage.setItem('userProfile', JSON.stringify(user))
+          
+          // 更新 Vuex state
+          commit('setAuth', { token, profile: user })
+          
+          return { success: true, role: user.role }
+        } else {
+          throw new Error(response.data.message || '注册失败')
+        }
+      } catch (error) {
+        console.error('注册失败:', error)
+        throw error
+      }
     },
     async resetPasswordBySms(context, { phone, code, newPassword }) {
       void context; void phone; void code; void newPassword;
       return true
     },
     async logout({ commit }) {
+      // 清除 localStorage
+      localStorage.removeItem('authToken')
+      localStorage.removeItem('userProfile')
+      
+      // 清除 Vuex state
       commit('clearAuth')
+      
+      // 跳转到首页
+      if (typeof window !== 'undefined') {
+        window.location.href = '/home'
+      }
     },
     toggleLike({ commit }, articleId) {
       commit('toggleLike', articleId)
@@ -151,13 +220,13 @@ export default new Vuex.Store({
         articleId,
         content,
         date: new Date().toISOString(),
-        author: this.getters.username || '匿名用户',
+        author: this.getters.displayName,
         parentCommentId
       }
       commit('addComment', comment)
       // 发送评论通知给目标作者（若非自己）
       try {
-        const actor = this.getters.username || '匿名用户'
+        const actor = this.getters.displayName
         const resolvedTargetAuthor = targetAuthor
         const resolvedTargetType = targetType || 'article'
         if (resolvedTargetAuthor && resolvedTargetAuthor !== actor) {

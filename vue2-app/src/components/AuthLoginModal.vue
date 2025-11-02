@@ -4,7 +4,7 @@
       <h3>登录</h3>
     </div>
     <form class="form" @submit.prevent="onSubmit">
-      <input v-model="phone" placeholder="手机号" class="form-input" />
+      <input v-model="username" placeholder="昵称或手机号" class="form-input" />
       <input v-model="password" type="password" placeholder="密码" class="form-input" />
       <div class="actions">
         <button type="submit" class="submit-btn">登录</button>
@@ -22,12 +22,17 @@ export default {
   name: 'AuthLoginModal',
   components: { BaseModal },
   data() {
-    return { phone: '', password: '' }
+    return { username: '', password: '' }
   },
   methods: {
     async onSubmit() {
       try {
-        const result = await this.$store.dispatch('loginWithPassword', { phone: this.phone, password: this.password })
+        console.log('开始登录，用户名:', this.username)
+        const result = await this.$store.dispatch('loginWithPassword', { 
+          username: this.username, 
+          password: this.password 
+        })
+        console.log('登录成功:', result)
         this.$emit('close')
         
         // 根据角色自动跳转
@@ -37,8 +42,11 @@ export default {
           this.$router.push('/home')
         }
       } catch (error) {
-        console.error('登录失败:', error)
-        // 可以添加错误提示
+        console.error('登录失败详情:', error)
+        console.error('错误响应:', error.response)
+        console.error('错误状态:', error.response?.status)
+        console.error('错误数据:', error.response?.data)
+        alert('登录失败：' + (error.response?.data?.message || error.message || '未知错误'))
       }
     }
   }

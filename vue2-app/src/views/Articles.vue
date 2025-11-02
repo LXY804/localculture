@@ -26,7 +26,11 @@
           </div>
           <div class="meta">
             <span>{{ formatDate(a.date) }}</span>
-            <div class="ops">
+            <div class="stats">
+              <span class="stat-item">👁️ {{ a.views || 0 }}</span>
+              <span class="stat-item">👍 {{ a.likes || 0 }}</span>
+            </div>
+            <div class="ops" v-if="isLoggedIn">
               <button 
                 class="btn like-btn" 
                 :class="{ active: isLiked(a.id) }"
@@ -43,6 +47,9 @@
                 <span class="btn-icon">⭐</span>
                 {{ isFavorited(a.id) ? '已收藏' : '收藏' }}
               </button>
+            </div>
+            <div class="login-hint" v-else>
+              <span class="hint-text">登录后可点赞收藏</span>
             </div>
           </div>
         </div>
@@ -69,6 +76,9 @@ export default {
   components: { BaseModal, ArticlePublishForm },
   computed: {
     ...mapGetters(['isLiked', 'isFavorited']),
+    isLoggedIn() {
+      return !!localStorage.getItem('authToken')
+    },
     list() { return this.$store.state.articles.list },
     filtered() {
       const q = (this.localQ || '').toLowerCase()
@@ -94,6 +104,10 @@ export default {
   created() {
     this.$store.dispatch('articles/fetchArticles')
   },
+  activated() {
+    // 当页面被激活时（比如从文章详情页返回），刷新文章列表
+    this.$store.dispatch('articles/fetchArticles')
+  },
   methods: {
     ...mapActions(['toggleLike', 'toggleFavorite']),
     openPublish() { this.showPublish = true },
@@ -107,20 +121,20 @@ export default {
       const p = (n) => String(n).padStart(2, '0')
       return `${d.getFullYear()}/${p(d.getMonth()+1)}/${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`
     },
-    handlePublish(payload) {
-      const newId = String(Date.now())
-      const newArticle = { 
-        id: newId, 
-        date: new Date().toISOString(), 
-        author: this.$store.getters.username || '匿名用户',
-        ...payload 
+    async handlePublish(payload) {
+      try {
+        // 调用 Vuex action 创建文章（会调用后端API）
+        const newArticle = await this.$store.dispatch('articles/createArticle', payload)
+        
+        this.closePublish()
+        this.$nextTick(() => {
+          alert('发布成功！')
+          this.$router.push({ name: 'article-detail', params: { id: newArticle.id }, query: { from: 'list' } })
+        })
+      } catch (error) {
+        console.error('发布失败:', error)
+        alert('发布失败：' + (error.message || '未知错误'))
       }
-      this.list.unshift(newArticle)
-      this.closePublish()
-      this.$nextTick(() => {
-        alert('发布成功！')
-        this.$router.push({ name: 'article-detail', params: { id: newId }, query: { from: 'list' } })
-      })
     },
     toggleLike(articleId) {
       this.$store.dispatch('toggleLike', articleId)
@@ -190,7 +204,9 @@ export default {
 .summary { color: #6b7280; margin: 0; }
 .tags { display: flex; gap: 8px; flex-wrap: wrap; }
 .tag { background: #f3f4f6; border-radius: 12px; padding: 2px 8px; font-size: 12px; color: #374151; }
-.meta { display: flex; align-items: center; justify-content: space-between; color: #6b7280; font-size: 12px; }
+.meta { display: flex; flex-direction: column; gap: 8px; color: #6b7280; font-size: 12px; }
+.stats { display: flex; gap: 12px; }
+.stat-item { display: flex; align-items: center; gap: 4px; }
 .ops { display: flex; gap: 8px; }
 .btn { 
   border: 1px solid #dcdfe6; 
@@ -235,6 +251,23 @@ export default {
 
 .btn-icon {
   font-size: 12px;
+}
+
+/* 登录提示样式 */
+.login-hint {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 12px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+}
+
+.hint-text {
+  color: #718096;
+  font-size: 12px;
+  font-style: italic;
 }
 </style>
 
