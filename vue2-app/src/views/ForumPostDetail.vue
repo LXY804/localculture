@@ -8,14 +8,22 @@
       <div class="article-container">
         <header class="article-header">
           <h1 class="article-title">{{ post.title }}</h1>
-          <p class="article-summary">{{ post.brief }}</p>
+          <p class="article-summary" v-if="post.content">{{ post.content.substring(0, 200) }}...</p>
           <div class="article-meta">
             <div class="meta-item"><span class="meta-label">发布人：</span><span class="meta-value">{{ post.author }}</span></div>
-            <div class="meta-item"><span class="meta-label">发布时间：</span><span class="meta-value">{{ formatDate(post.date) }}</span></div>
-            <div class="meta-item" v-if="post.tags && post.tags.length">
-              <span class="meta-label">标签：</span>
-              <div class="tags"><span v-for="t in post.tags" :key="t" class="tag"># {{ t }}</span></div>
-            </div>
+            <div class="meta-item"><span class="meta-label">发布时间：</span><span class="meta-value">{{ formatDate(post.created_at) }}</span></div>
+            <div class="meta-item"><span class="meta-label">分类：</span><span class="meta-value">{{ post.category || '未分类' }}</span></div>
+            <div class="meta-item"><span class="meta-label">浏览：</span><span class="meta-value">{{ post.views }}</span></div>
+            <div class="meta-item"><span class="meta-label">点赞：</span><span class="meta-value">{{ post.likes }}</span></div>
+            <div class="meta-item"><span class="meta-label">评论：</span><span class="meta-value">{{ post.comments_count }}</span></div>
+          </div>
+
+          <!-- 帖子操作按钮（只有作者可见） -->
+          <div v-if="canDeletePost" class="post-actions">
+            <button class="delete-post-btn" @click="deletePost">
+              <span class="btn-icon">🗑️</span>
+              删除帖子
+            </button>
           </div>
         </header>
 
@@ -35,7 +43,7 @@
         </div>
 
         <div class="comments-section">
-          <h3 class="comments-title">评论 ({{ allComments.length }})</h3>
+          <h3 class="comments-title">评论 ({{ comments.length }})</h3>
 
           <div class="comment-form">
             <textarea v-model="newComment" rows="3" class="comment-input" placeholder="写下你的想法..."></textarea>
@@ -45,8 +53,8 @@
           <div class="comments-list">
             <div v-for="c in rootComments" :key="c.id" class="comment-item" :id="'comment-' + c.id">
               <div class="comment-header">
-                <span class="comment-author">{{ c.author }}</span>
-                <span class="comment-date">{{ formatDate(c.date) }}</span>
+                <span class="comment-author">{{ c.nickname || c.username }}</span>
+                <span class="comment-date">{{ formatDate(c.created_at) }}</span>
               </div>
               <div class="comment-content">{{ c.content }}</div>
               <div class="comment-actions">
@@ -61,8 +69,8 @@
               <div class="replies" v-if="childrenMap[c.id] && childrenMap[c.id].length">
                 <div v-for="rc in childrenMap[c.id]" :key="rc.id" class="reply-item" :id="'comment-' + rc.id">
                   <div class="reply-header">
-                    <span class="reply-author">{{ rc.author }}</span>
-                    <span class="reply-date">{{ formatDate(rc.date) }}</span>
+                    <span class="reply-author">{{ rc.nickname || rc.username }}</span>
+                    <span class="reply-date">{{ formatDate(rc.created_at) }}</span>
                   </div>
                   <div class="reply-content">{{ rc.content }}</div>
                   <div class="reply-actions">
@@ -80,56 +88,218 @@
 </template>
 
 <script>
-import forumPosts from '@/data/forumPosts'
+import axios from 'axios'
 import { mapGetters } from 'vuex'
 export default {
   name: 'ForumPostDetailPage',
   props: { id: String },
   data() {
-    return { newComment: '', replyOpenId: null, replyText: '' }
+    return { 
+      post: null,
+      comments: [],
+      loading: true,
+      error: null,
+      newComment: '', 
+      replyOpenId: null, 
+      replyText: '' 
+    }
   },
   computed: {
-    ...mapGetters(['isLiked', 'isFavorited', 'getCommentsByArticle', 'isCommentLiked']),
-    post() {
-      const targetId = this.$route.params.id || this.id
-      return forumPosts.find(p => p.id === String(targetId)) || null
+    ...mapGetters(['isForumLiked', 'isForumFavorited', 'isCommentLiked']),
+    postId() { return this.$route.params.id || this.id },
+    isLikedPost() { return this.post ? this.post.user_liked : false },
+    isFavoritedPost() { return this.post ? this.post.user_favorited : false },
+    allComments() { return this.comments },
+    canDeletePost() {
+      if (!this.post) return false
+      
+      const currentUser = this.$store.state.userProfile
+      if (!currentUser) return false
+      
+      // 管理员可以删除任何帖子
+      if (currentUser.role === 'admin') return true
+      
+      // 作者可以删除自己的帖子
+      return this.post.author_id === currentUser.id
     },
-    postId() { return this.post ? this.post.id : null },
-    isLikedPost() { return this.postId ? this.$store.getters.isLiked(this.postId) : false },
-    isFavoritedPost() { return this.postId ? this.$store.getters.isFavorited(this.postId) : false },
-    allComments() { return this.postId ? this.$store.getters.getCommentsByArticle(this.postId) : [] },
-    rootComments() { return this.allComments.filter(c => !c.parentCommentId) },
+    rootComments() { return this.allComments.filter(c => !c.parent_id) },
     childrenMap() {
       const map = {}
       this.allComments.forEach(c => {
-        if (!c.parentCommentId) return
-        if (!map[c.parentCommentId]) map[c.parentCommentId] = []
-        map[c.parentCommentId].push(c)
+        if (!c.parent_id) return
+        if (!map[c.parent_id]) map[c.parent_id] = []
+        map[c.parent_id].push(c)
       })
       return map
     }
   },
+  async created() {
+    await this.fetchPostDetail()
+    await this.fetchComments()
+  },
+  watch: {
+    '$route.params.id': {
+      handler(newId, oldId) {
+        if (newId && newId !== oldId) {
+          this.fetchPostDetail()
+          this.fetchComments()
+        }
+      }
+    }
+  },
   methods: {
+    // 🆕 从数据库获取帖子详情
+    async fetchPostDetail() {
+      try {
+        this.loading = true
+        const token = localStorage.getItem('authToken')
+        const headers = token ? { Authorization: `Bearer ${token}` } : {}
+        
+        const response = await axios.get(`http://localhost:3001/api/forum/posts/${this.postId}`, { headers })
+        this.post = response.data.data
+        this.loading = false
+      } catch (error) {
+        console.error('获取帖子详情失败:', error)
+        this.error = '获取帖子详情失败'
+        this.loading = false
+      }
+    },
+    
+    // 🆕 从数据库获取评论列表
+    async fetchComments() {
+      try {
+        const response = await axios.get(`http://localhost:3001/api/forum/posts/${this.postId}/comments`)
+        this.comments = response.data.data.comments
+      } catch (error) {
+        console.error('获取评论失败:', error)
+      }
+    },
+    
     formatDate(iso) {
       if (!iso) return ''
       const d = new Date(iso); const p = n => String(n).padStart(2, '0')
       return `${d.getFullYear()}年${p(d.getMonth()+1)}月${p(d.getDate())}日 ${p(d.getHours())}:${p(d.getMinutes())}`
     },
-    toggleLikePost() { if (this.postId) this.$store.dispatch('toggleLike', this.postId) },
-    toggleFavoritePost() { if (this.postId) this.$store.dispatch('toggleFavorite', this.postId) },
-    submitRootComment() {
+    
+    async toggleLikePost() {
+      if (!this.postId) return
+      try {
+        await this.$store.dispatch('toggleForumLike', parseInt(this.postId))
+        // 刷新帖子数据
+        await this.fetchPostDetail()
+        // 触发数据更新事件
+        this.$root.$emit('userDataChanged', { type: 'forum-like' })
+      } catch (error) {
+        // 错误已在action中处理
+      }
+    },
+    
+    async toggleFavoritePost() {
+      if (!this.postId) return
+      try {
+        await this.$store.dispatch('toggleForumFavorite', parseInt(this.postId))
+        // 刷新帖子数据
+        await this.fetchPostDetail()
+        // 触发数据更新事件
+        this.$root.$emit('userDataChanged', { type: 'forum-favorite' })
+      } catch (error) {
+        // 错误已在action中处理
+      }
+    },
+    
+    async submitRootComment() {
       if (!this.newComment.trim() || !this.postId) return
-      this.$store.dispatch('addComment', { articleId: this.postId, content: this.newComment.trim(), parentCommentId: null, targetType: 'forum', targetAuthor: this.post.author })
-      this.newComment = ''
+      
+      const token = localStorage.getItem('authToken')
+      if (!token) {
+        alert('请先登录')
+        return
+      }
+      
+      try {
+        const response = await axios.post(
+          `http://localhost:3001/api/forum/posts/${this.postId}/comments`,
+          { content: this.newComment.trim() },
+          { headers: { Authorization: `Bearer ${token}` } }
+        )
+        
+        if (response.data.success) {
+          this.newComment = ''
+          await this.fetchComments()
+          await this.fetchPostDetail()
+          this.$root.$emit('userDataChanged', { type: 'forum-comment' })
+          alert('评论发表成功！')
+        }
+      } catch (error) {
+        console.error('发表评论失败:', error)
+        alert('评论发表失败，请重试')
+      }
     },
+    
     openReplyFor(commentId) { this.replyOpenId = commentId; this.replyText = '' },
-    submitReply(parent) {
+    
+    async submitReply(parent) {
       if (!this.replyText.trim() || !this.postId) return
-      this.$store.dispatch('addComment', { articleId: this.postId, content: this.replyText.trim(), parentCommentId: parent.id, targetType: 'forum', targetAuthor: parent.author })
-      this.replyText = ''; this.replyOpenId = null
+      
+      const token = localStorage.getItem('authToken')
+      if (!token) {
+        alert('请先登录')
+        return
+      }
+      
+      try {
+        const response = await axios.post(
+          `http://localhost:3001/api/forum/posts/${this.postId}/comments`,
+          { content: this.replyText.trim(), parent_id: parent.id },
+          { headers: { Authorization: `Bearer ${token}` } }
+        )
+        
+        if (response.data.success) {
+          this.replyText = ''
+          this.replyOpenId = null
+          await this.fetchComments()
+          alert('回复发表成功！')
+        }
+      } catch (error) {
+        console.error('发表回复失败:', error)
+        alert('回复发表失败，请重试')
+      }
     },
+    
     onToggleCommentLike(c) {
       this.$store.dispatch('toggleCommentLike', { commentId: c.id, articleId: this.postId, commentAuthor: c.author, targetType: 'forum' })
+    },
+    async deletePost() {
+      if (!confirm('确定要删除这个帖子吗？删除后无法恢复。')) {
+        return
+      }
+      
+      try {
+        const token = localStorage.getItem('authToken')
+        if (!token) {
+          alert('请先登录')
+          return
+        }
+        
+        const response = await axios.delete(
+          `http://localhost:3001/api/forum/posts/${this.postId}`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        )
+        
+        if (response.data.success) {
+          alert('帖子删除成功')
+          this.$router.push({ name: 'forum' })
+        } else {
+          alert(response.data.message || '删除失败')
+        }
+      } catch (error) {
+        console.error('删除帖子失败:', error)
+        if (error.response?.status === 403) {
+          alert('您没有权限删除此帖子')
+        } else {
+          alert('删除失败，请重试')
+        }
+      }
     }
   },
   mounted() {
@@ -157,6 +327,45 @@ export default {
 .article-container { max-width: 800px; margin: 0 auto; padding: 40px 24px; }
 .article-header { background: #fff; border-radius: 16px; padding: 40px; margin-bottom: 24px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
 .article-title { font-size: 2.2rem; font-weight: 700; color: #1a202c; line-height: 1.2; margin: 0 0 16px; text-align: center; }
+
+/* 帖子操作按钮样式 */
+.post-actions {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid #e2e8f0;
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+}
+
+.delete-post-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.delete-post-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(239, 68, 68, 0.3);
+  background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+}
+
+.delete-post-btn:active {
+  transform: translateY(0);
+}
+
+.delete-post-btn .btn-icon {
+  font-size: 16px;
+}
 .article-summary { font-size: 1.1rem; color: #4a5568; line-height: 1.6; text-align: center; margin: 0 0 24px; }
 .article-meta { display: flex; flex-direction: column; gap: 10px; padding-top: 16px; border-top: 1px solid #e2e8f0; }
 .meta-item { display: flex; gap: 8px; align-items: center; }

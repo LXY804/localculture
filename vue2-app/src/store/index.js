@@ -36,7 +36,9 @@ export default new Vuex.Store({
       likes: [], // 点赞的文章ID列表
       favorites: [], // 收藏的文章ID列表
       comments: [], // 评论列表 { id, articleId, content, date, author }
-      commentLikes: [], // 被点赞的评论ID（仅本地记录，不计入“我的点赞”）
+      commentLikes: [], // 被点赞的评论ID（仅本地记录，不计入"我的点赞"）
+      forumLikes: [], // 🆕 论坛帖子点赞ID列表
+      forumFavorites: [], // 🆕 论坛帖子收藏ID列表
     },
     notifications: persistedNotifications || [], // { id, type:'like'|'comment', targetType:'article'|'comment', actor, articleId, commentId?, date, excerpt }
   },
@@ -52,6 +54,8 @@ export default new Vuex.Store({
     userActivities: (state) => state.userActivities,
     isLiked: (state) => (articleId) => state.userActivities.likes.includes(articleId),
     isFavorited: (state) => (articleId) => state.userActivities.favorites.includes(articleId),
+    isForumLiked: (state) => (postId) => state.userActivities.forumLikes.includes(postId),
+    isForumFavorited: (state) => (postId) => state.userActivities.forumFavorites.includes(postId),
     getCommentsByArticle: (state) => (articleId) => state.userActivities.comments.filter(c => c.articleId === articleId),
     isCommentLiked: (state) => (commentId) => state.userActivities.commentLikes.includes(commentId),
     notifications: (state) => state.notifications,
@@ -104,6 +108,30 @@ export default new Vuex.Store({
       }
       this.commit('saveUserActivities')
     },
+    toggleForumLike(state, postId) {
+      if (!state.userActivities.forumLikes) {
+        state.userActivities.forumLikes = []
+      }
+      const index = state.userActivities.forumLikes.indexOf(postId)
+      if (index > -1) {
+        state.userActivities.forumLikes.splice(index, 1)
+      } else {
+        state.userActivities.forumLikes.push(postId)
+      }
+      this.commit('saveUserActivities')
+    },
+    toggleForumFavorite(state, postId) {
+      if (!state.userActivities.forumFavorites) {
+        state.userActivities.forumFavorites = []
+      }
+      const index = state.userActivities.forumFavorites.indexOf(postId)
+      if (index > -1) {
+        state.userActivities.forumFavorites.splice(index, 1)
+      } else {
+        state.userActivities.forumFavorites.push(postId)
+      }
+      this.commit('saveUserActivities')
+    },
     addComment(state, comment) {
       state.userActivities.comments.push(comment)
       this.commit('saveUserActivities')
@@ -130,7 +158,7 @@ export default new Vuex.Store({
     },
   },
   actions: {
-    async loginWithPassword({ commit }, { username, password }) {
+    async loginWithPassword({ commit, dispatch }, { username, password }) {
       try {
         console.log('Vuex: 开始登录请求', { username })
         const { login } = await import('@/api/users')
@@ -150,6 +178,9 @@ export default new Vuex.Store({
           // 更新 Vuex state
           commit('setAuth', { token, profile: user })
           
+          // 🆕 同步用户互动数据（从数据库加载点赞/收藏状态）
+          await dispatch('syncUserInteractions')
+          
           return { success: true, role: user.role }
         } else {
           console.error('Vuex: 登录失败，服务器返回:', response.data)
@@ -167,7 +198,7 @@ export default new Vuex.Store({
       }
     },
     
-    async registerWithPhone({ commit }, { username, nickname, phone, password }) {
+    async registerWithPhone({ commit, dispatch }, { username, nickname, phone, password }) {
       try {
         const { register } = await import('@/api/users')
         const response = await register({ username, nickname, phone, password })
@@ -181,6 +212,9 @@ export default new Vuex.Store({
           
           // 更新 Vuex state
           commit('setAuth', { token, profile: user })
+          
+          // 🆕 同步用户互动数据
+          await dispatch('syncUserInteractions')
           
           return { success: true, role: user.role }
         } else {
@@ -208,11 +242,133 @@ export default new Vuex.Store({
         window.location.href = '/home'
       }
     },
-    toggleLike({ commit }, articleId) {
-      commit('toggleLike', articleId)
+    
+    // 🆕 从后端同步用户互动状态
+    async syncUserInteractions({ commit, state }) {
+      if (!state.authToken) {
+        console.log('未登录，跳过状态同步')
+        return
+      }
+      
+      try {
+        console.log('开始同步用户互动状态...')
+        const axios = await import('axios')
+        const headers = { 'Authorization': `Bearer ${state.authToken}` }
+        
+        // 并行获取文章和论坛的点赞收藏列表
+        const [likesRes, favoritesRes, forumLikesRes, forumFavoritesRes] = await Promise.all([
+          axios.default.get('http://localhost:3001/api/user/likes?limit=1000', { headers })
+            .catch(err => ({ data: { success: false, error: err.message } })),
+          axios.default.get('http://localhost:3001/api/user/favorites?limit=1000', { headers })
+            .catch(err => ({ data: { success: false, error: err.message } })),
+          axios.default.get('http://localhost:3001/api/user/forum/likes?limit=1000', { headers })
+            .catch(err => ({ data: { success: false, error: err.message } })),
+          axios.default.get('http://localhost:3001/api/user/forum/favorites?limit=1000', { headers })
+            .catch(err => ({ data: { success: false, error: err.message } }))
+        ])
+        
+        if (likesRes.data.success) {
+          // 提取文章ID数组
+          const likedIds = likesRes.data.data.likes.map(item => item.id)
+          state.userActivities.likes = likedIds
+          console.log('✅ 文章点赞状态同步成功，共', likedIds.length, '条')
+        }
+        
+        if (favoritesRes.data.success) {
+          // 提取文章ID数组
+          const favoritedIds = favoritesRes.data.data.favorites.map(item => item.id)
+          state.userActivities.favorites = favoritedIds
+          console.log('✅ 文章收藏状态同步成功，共', favoritedIds.length, '条')
+        }
+        
+        // 保存论坛数据到独立字段
+        if (!state.userActivities.forumLikes) {
+          state.userActivities.forumLikes = []
+        }
+        if (!state.userActivities.forumFavorites) {
+          state.userActivities.forumFavorites = []
+        }
+        
+        if (forumLikesRes.data.success) {
+          const forumLikedIds = forumLikesRes.data.data.likes.map(item => item.id)
+          state.userActivities.forumLikes = forumLikedIds
+          console.log('✅ 论坛点赞状态同步成功，共', forumLikedIds.length, '条')
+        }
+        
+        if (forumFavoritesRes.data.success) {
+          const forumFavoritedIds = forumFavoritesRes.data.data.favorites.map(item => item.id)
+          state.userActivities.forumFavorites = forumFavoritedIds
+          console.log('✅ 论坛收藏状态同步成功，共', forumFavoritedIds.length, '条')
+        }
+        
+        // 保存到localStorage
+        commit('saveUserActivities')
+        console.log('✅ 用户状态已保存到本地')
+      } catch (error) {
+        console.error('同步用户状态失败:', error)
+      }
     },
-    toggleFavorite({ commit }, articleId) {
+    async toggleLike({ commit, state }, articleId) {
+      // 检查是否登录
+      if (!state.authToken) {
+        alert('请先登录')
+        return
+      }
+      
+      try {
+        // 调用后端API
+        const axios = await import('axios')
+        const response = await axios.default.post(
+          `http://localhost:3001/api/articles/${articleId}/like`,
+          {},
+          {
+            headers: {
+              'Authorization': `Bearer ${state.authToken}`
+            }
+          }
+        )
+        
+        if (response.data.success) {
+          // 更新本地状态
+      commit('toggleLike', articleId)
+          return response.data
+        }
+      } catch (error) {
+        console.error('点赞操作失败:', error)
+        alert('操作失败：' + (error.response?.data?.message || error.message || '未知错误'))
+        throw error
+      }
+    },
+    async toggleFavorite({ commit, state }, articleId) {
+      // 检查是否登录
+      if (!state.authToken) {
+        alert('请先登录')
+        return
+      }
+      
+      try {
+        // 调用后端API
+        const axios = await import('axios')
+        const response = await axios.default.post(
+          `http://localhost:3001/api/articles/${articleId}/favorite`,
+          {},
+          {
+            headers: {
+              'Authorization': `Bearer ${state.authToken}`
+            }
+          }
+        )
+        
+        if (response.data.success) {
+          // 更新本地状态
       commit('toggleFavorite', articleId)
+          return response.data
+        }
+      } catch (error) {
+        console.error('收藏操作失败:', error)
+        alert('操作失败：' + (error.response?.data?.message || error.message || '未知错误'))
+        throw error
+      }
     },
     addComment({ commit }, { articleId, content, parentCommentId = null, targetType, targetAuthor }) {
       const comment = {
@@ -257,6 +413,66 @@ export default new Vuex.Store({
           date: new Date().toISOString(),
           excerpt: ''
         })
+      }
+    },
+    
+    // 🆕 论坛帖子点赞
+    async toggleForumLike({ commit, state }, postId) {
+      if (!state.authToken) {
+        alert('请先登录')
+        return
+      }
+      
+      try {
+        const axios = await import('axios')
+        const response = await axios.default.post(
+          `http://localhost:3001/api/forum/posts/${postId}/like`,
+          {},
+          {
+            headers: {
+              'Authorization': `Bearer ${state.authToken}`
+            }
+          }
+        )
+        
+        if (response.data.success) {
+          commit('toggleForumLike', postId)
+          return response.data
+        }
+      } catch (error) {
+        console.error('论坛点赞操作失败:', error)
+        alert('操作失败：' + (error.response?.data?.message || error.message || '未知错误'))
+        throw error
+      }
+    },
+    
+    // 🆕 论坛帖子收藏
+    async toggleForumFavorite({ commit, state }, postId) {
+      if (!state.authToken) {
+        alert('请先登录')
+        return
+      }
+      
+      try {
+        const axios = await import('axios')
+        const response = await axios.default.post(
+          `http://localhost:3001/api/forum/posts/${postId}/favorite`,
+          {},
+          {
+            headers: {
+              'Authorization': `Bearer ${state.authToken}`
+            }
+          }
+        )
+        
+        if (response.data.success) {
+          commit('toggleForumFavorite', postId)
+          return response.data
+        }
+      } catch (error) {
+        console.error('论坛收藏操作失败:', error)
+        alert('操作失败：' + (error.response?.data?.message || error.message || '未知错误'))
+        throw error
       }
     },
   },

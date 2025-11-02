@@ -1,6 +1,7 @@
 <template>
   <form class="form" @submit.prevent="onSubmit">
     <h3 class="title">发布新文章</h3>
+    
     <div class="row">
       <label>标题</label>
       <input v-model.trim="model.title" required placeholder="请输入标题" />
@@ -30,20 +31,23 @@ export default {
   data() {
     return {
       model: { title: '', summary: '', content: '' },
-      tagsInput: '',
+      tagsInput: ''
     }
   },
   methods: {
     onSubmit() {
-      if (!this.model.title || !this.model.content) return;
+      if (!this.model.title || !this.model.content) return
+      
       const tags = (this.tagsInput || '')
         .split(',')
         .map(s => s.trim())
         .filter(Boolean)
+      
       const payload = {
         ...this.model,
         tags,
       }
+      
       this.$emit('submit', payload)
     }
   }
@@ -51,16 +55,65 @@ export default {
 </script>
 
 <style scoped>
-.form { display: flex; flex-direction: column; gap: 12px; width: 380px; max-width: 80vw; }
-.title { margin: 0 0 4px; font-size: 18px; }
-.row { display: grid; gap: 6px; }
-label { color: #374151; font-size: 13px; }
-input, textarea { border: 1px solid #e5e7eb; border-radius: 6px; padding: 8px 10px; font: inherit; }
+.form { 
+  display: flex; 
+  flex-direction: column; 
+  gap: 12px; 
+  width: 100%;
+  max-width: 500px;
+  box-sizing: border-box;
+}
+.title { margin: 0 0 12px; font-size: 18px; font-weight: 600; }
+
+.row { 
+  display: grid; 
+  gap: 6px; 
+}
+label { 
+  color: #374151; 
+  font-size: 13px; 
+  font-weight: 500; 
+  display: block;
+  margin-bottom: 4px;
+}
+input, textarea { 
+  border: 1px solid #e5e7eb; 
+  border-radius: 6px; 
+  padding: 10px 12px; 
+  font: inherit; 
+  transition: border-color 0.2s ease;
+  width: 100%;
+  box-sizing: border-box;
+}
+input:focus, textarea:focus {
+  outline: none;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
 .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
-.btn { border: 1px solid #d1d5db; background: #fff; border-radius: 6px; padding: 6px 12px; cursor: pointer; }
-.btn.primary { background: #2563eb; border-color: #2563eb; color: #fff; }
+.btn { 
+  border: 1px solid #d1d5db; 
+  background: #fff; 
+  border-radius: 6px; 
+  padding: 6px 14px; 
+  cursor: pointer; 
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+.btn.primary { 
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); 
+  border-color: #2563eb; 
+  color: #fff; 
+}
 .btn.ghost { background: #fff; }
-.btn:hover { filter: brightness(0.98); }
+.btn:hover { 
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+.btn.primary:hover {
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+}
 </style>
 
 

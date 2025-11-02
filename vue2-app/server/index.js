@@ -148,10 +148,67 @@ app.get('/api/hot-articles', async (req, res) => {
     })
   } catch (error) {
     console.error('获取热门文章失败:', error)
-    res.status(500).json({ 
-      success: false,
-      message: '获取热门文章失败: ' + error.message
-    })
+    // fallback to mock data
+    try {
+      const mockData = [
+        {
+          id: 1,
+          article_id: 1,
+          title: '地方传统美食背后的故事',
+          summary: '探索地方传统美食的历史渊源和文化内涵，了解每一道菜背后的故事。',
+          cover: '/assets/food1.jpg',
+          category: '传统文化',
+          author: '美食专家',
+          views: 1200,
+          likes: 85,
+          comments_count: 23,
+          hot_score: 95.5,
+          featured: 1,
+          created_at: new Date().toISOString()
+        },
+        {
+          id: 2,
+          article_id: 2,
+          title: '木版年画的传承与创新',
+          summary: '传统木版年画技艺的传承现状与现代创新应用，保护非遗文化。',
+          cover: '/assets/painting.jpg',
+          category: '手工艺',
+          author: '非遗传承人',
+          views: 980,
+          likes: 72,
+          comments_count: 18,
+          hot_score: 88.2,
+          featured: 0,
+          created_at: new Date().toISOString()
+        },
+        {
+          id: 3,
+          article_id: 3,
+          title: '民俗节庆与社区凝聚力',
+          summary: '传统节庆活动如何增强社区凝聚力，促进邻里关系和谐发展。',
+          cover: '/assets/festival.jpg',
+          category: '民俗节庆',
+          author: '社区研究员',
+          views: 750,
+          likes: 58,
+          comments_count: 15,
+          hot_score: 82.1,
+          featured: 1,
+          created_at: new Date().toISOString()
+        }
+      ]
+      
+      res.json({
+        success: true,
+        data: mockData.slice(0, limit),
+        message: '获取热门文章成功（使用模拟数据）'
+      })
+    } catch (mockError) {
+      res.status(500).json({ 
+        success: false,
+        message: '获取热门文章失败: ' + error.message
+      })
+    }
   }
 })
 
@@ -258,8 +315,28 @@ app.post('/api/hot-articles/init', async (req, res) => {
 // 获取文章列表
 app.get('/api/articles', async (req, res) => {
   try {
-    // 优先从数据库读取；若库表不存在则回退到 mock
-    const [rows] = await pool.query('SELECT id, title, content, category, status, visible, cover, views, likes FROM articles ORDER BY id DESC LIMIT 200')
+    // 现在 articles 表已包含完整数据，直接查询即可
+    // 使用 LEFT JOIN 标记是否为热门文章，热门文章排在前面
+    const [rows] = await pool.query(`
+      SELECT 
+        a.id,
+        a.title,
+        a.content,
+        a.summary,
+        a.category,
+        a.status,
+        a.visible,
+        a.cover,
+        a.views,
+        a.likes,
+        a.created_at,
+        CASE WHEN h.id IS NOT NULL THEN 1 ELSE 0 END as is_hot
+      FROM articles a
+      LEFT JOIN hotarticles h ON a.id = h.article_id AND h.status = 'active'
+      ORDER BY is_hot DESC, a.id DESC
+      LIMIT 200
+    `)
+    
     if (rows && rows.length) {
       const role = req.query.role || 'user'
       let list = rows
@@ -267,6 +344,7 @@ app.get('/api/articles', async (req, res) => {
       return res.json(list)
     }
   } catch (e) {
+    console.error('获取文章列表失败:', e)
     // fallback to mock
   }
   try {
@@ -285,60 +363,20 @@ app.get('/api/articles/:id', async (req, res) => {
   try {
     const { id } = req.params
     
-    // 先检查是否是热门文章
-    const [hotRows] = await pool.query(
-      'SELECT * FROM hotarticles WHERE article_id = ? AND status = ?',
-      [id, 'active']
+    // 先增加浏览量
+    await pool.query('UPDATE articles SET views = views + 1 WHERE id = ?', [id])
+    
+    // 获取文章详情（现在 articles 表已包含完整数据）
+    const [rows] = await pool.query(
+      'SELECT id, title, content, summary, category, status, visible, cover, views, likes, created_at, updated_at FROM articles WHERE id = ?',
+      [id]
     )
     
-    
-    let article = null
-    let isHotArticle = false
-    
-    if (hotRows.length > 0) {
-      // 是热门文章，从hotarticles表获取数据
-      isHotArticle = true
-      const hotArticle = hotRows[0]
-      
-      // 增加热门文章的浏览量
-      await pool.query('UPDATE hotarticles SET views = views + 1 WHERE article_id = ?', [id])
-      
-      // 获取更新后的数据
-      const [updatedHotRows] = await pool.query(
-        'SELECT * FROM hotarticles WHERE article_id = ? AND status = ?',
-        [id, 'active']
-      )
-      
-      article = {
-        id: updatedHotRows[0].article_id,
-        title: updatedHotRows[0].title,
-        content: updatedHotRows[0].summary, // 使用summary作为content
-        category: updatedHotRows[0].category,
-        status: 'published',
-        visible: 1,
-        cover: updatedHotRows[0].cover,
-        views: updatedHotRows[0].views,
-        likes: updatedHotRows[0].likes,
-        created_at: updatedHotRows[0].created_at,
-        updated_at: updatedHotRows[0].created_at
-      }
-    } else {
-      // 普通文章，从articles表获取数据
-      // 先增加浏览量
-      await pool.query('UPDATE articles SET views = views + 1 WHERE id = ?', [id])
-      
-      // 获取文章详情
-      const [rows] = await pool.query(
-        'SELECT id, title, content, category, status, visible, cover, views, likes, created_at, updated_at FROM articles WHERE id = ?',
-        [id]
-      )
-      
-      if (rows.length === 0) {
-        return res.status(404).json({ message: '文章不存在' })
-      }
-      
-      article = rows[0]
+    if (rows.length === 0) {
+      return res.status(404).json({ message: '文章不存在' })
     }
+    
+    const article = rows[0]
     
     // 获取评论数量
     const [commentCount] = await pool.query(
@@ -437,20 +475,37 @@ app.put('/api/articles/:id', async (req, res) => {
   }
 })
 
-app.delete('/api/articles/:id', async (req, res) => {
+app.delete('/api/articles/:id', require('./middleware/auth').authenticateToken, async (req, res) => {
   try {
     const { id } = req.params
+    const userId = req.user.id
+    const userRole = req.user.role || 'user'
     
-    const [result] = await pool.query('DELETE FROM articles WHERE id=?', [id])
+    // 先检查文章是否存在并获取作者信息
+    const [articles] = await pool.query('SELECT author_id FROM articles WHERE id = ?', [id])
+    
+    if (articles.length === 0) {
+      return res.status(404).json({ success: false, message: '文章不存在' })
+    }
+    
+    const article = articles[0]
+    
+    // 检查权限：只有文章作者或管理员可以删除
+    if (article.author_id !== userId && userRole !== 'admin') {
+      return res.status(403).json({ success: false, message: '您没有权限删除此文章' })
+    }
+    
+    // 删除文章
+    const [result] = await pool.query('DELETE FROM articles WHERE id = ?', [id])
     
     if (result.affectedRows === 0) {
-      return res.status(404).json({ message: '文章不存在' })
+      return res.status(404).json({ success: false, message: '文章删除失败' })
     }
     
     res.json({ success: true, message: '文章删除成功' })
   } catch (error) {
     console.error('删除文章失败:', error)
-    res.status(500).json({ message: '删除文章失败', error: error.message })
+    res.status(500).json({ success: false, message: '删除文章失败', error: error.message })
   }
 })
 
@@ -775,7 +830,9 @@ app.get('/api/user/comments', require('./middleware/auth').authenticateToken, as
         ac.content,
         ac.created_at,
         a.id as article_id,
-        a.title as article_title
+        a.title as article_title,
+        a.category,
+        a.cover
       FROM article_comments ac
       LEFT JOIN articles a ON ac.article_id = a.id
       WHERE ac.user_id = ? AND ac.status = ?
@@ -868,8 +925,8 @@ app.post('/api/user/posts', require('./middleware/auth').authenticateToken, asyn
     }
     
     const [result] = await pool.query(
-      'INSERT INTO forum_posts (author_id, title, content, category, status) VALUES (?, ?, ?, ?, ?)',
-      [userId, title, content, category || '未分类', 'published']
+      'INSERT INTO forum_posts (author_id, title, content, category, status, visible) VALUES (?, ?, ?, ?, ?, ?)',
+      [userId, title, content, category || '未分类', 'published', 1]
     )
     
     res.status(201).json({
@@ -880,6 +937,532 @@ app.post('/api/user/posts', require('./middleware/auth').authenticateToken, asyn
   } catch (error) {
     console.error('发布帖子失败:', error)
     res.status(500).json({ message: '发布帖子失败', error: error.message })
+  }
+})
+
+// 删除论坛帖子
+app.delete('/api/forum/posts/:id', require('./middleware/auth').authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params
+    const userId = req.user.id
+    const userRole = req.user.role || 'user'
+    
+    // 先检查帖子是否存在并获取作者信息
+    const [posts] = await pool.query('SELECT author_id FROM forum_posts WHERE id = ?', [id])
+    
+    if (posts.length === 0) {
+      return res.status(404).json({ success: false, message: '帖子不存在' })
+    }
+    
+    const post = posts[0]
+    
+    // 检查权限：只有帖子作者或管理员可以删除
+    if (post.author_id !== userId && userRole !== 'admin') {
+      return res.status(403).json({ success: false, message: '您没有权限删除此帖子' })
+    }
+    
+    // 删除帖子
+    const [result] = await pool.query('DELETE FROM forum_posts WHERE id = ?', [id])
+    
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ success: false, message: '帖子删除失败' })
+    }
+    
+    res.json({ success: true, message: '帖子删除成功' })
+  } catch (error) {
+    console.error('删除帖子失败:', error)
+    res.status(500).json({ success: false, message: '删除帖子失败', error: error.message })
+  }
+})
+
+// ==================== 论坛帖子API ====================
+
+// 获取论坛帖子列表
+app.get('/api/forum/posts', async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1
+    const limit = parseInt(req.query.limit) || 100
+    const offset = (page - 1) * limit
+    
+    const [rows] = await pool.query(`
+      SELECT 
+        p.id,
+        p.title,
+        p.content,
+        p.category,
+        p.author_id,
+        p.views,
+        p.likes,
+        p.favorites_count,
+        p.comments_count,
+        p.created_at,
+        p.updated_at,
+        u.username as author_username,
+        u.nickname as author_nickname
+      FROM forum_posts p
+      LEFT JOIN users u ON p.author_id = u.id
+      WHERE p.status = 'published' AND p.visible = 1
+      ORDER BY p.created_at DESC
+      LIMIT ? OFFSET ?
+    `, [limit, offset])
+    
+    // 添加作者名称
+    const posts = rows.map(post => ({
+      ...post,
+      author: post.author_nickname || post.author_username || '匿名'
+    }))
+    
+    const [countResult] = await pool.query(
+      'SELECT COUNT(*) as total FROM forum_posts WHERE status = "published" AND visible = 1'
+    )
+    
+    res.json({
+      success: true,
+      data: {
+        posts: posts,
+        pagination: {
+          page,
+          limit,
+          total: countResult[0].total,
+          pages: Math.ceil(countResult[0].total / limit)
+        }
+      }
+    })
+  } catch (error) {
+    console.error('获取论坛帖子列表失败:', error)
+    res.status(500).json({ success: false, message: '获取帖子列表失败', error: error.message })
+  }
+})
+
+// 论坛帖子点赞/取消点赞
+app.post('/api/forum/posts/:id/like', require('./middleware/auth').authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params
+    const userId = req.user.id
+    
+    // 检查帖子是否存在
+    const [postRows] = await pool.query('SELECT id FROM forum_posts WHERE id = ?', [id])
+    if (postRows.length === 0) {
+      return res.status(404).json({ success: false, message: '帖子不存在' })
+    }
+    
+    // 检查是否已点赞
+    const [existingLike] = await pool.query(
+      'SELECT id FROM forum_post_likes WHERE post_id = ? AND user_id = ?',
+      [id, userId]
+    )
+    
+    if (existingLike.length > 0) {
+      // 取消点赞
+      await pool.query('DELETE FROM forum_post_likes WHERE post_id = ? AND user_id = ?', [id, userId])
+      await pool.query('UPDATE forum_posts SET likes = likes - 1 WHERE id = ?', [id])
+      
+      res.json({ 
+        success: true, 
+        message: '取消点赞成功',
+        liked: false
+      })
+    } else {
+      // 添加点赞
+      await pool.query('INSERT INTO forum_post_likes (post_id, user_id) VALUES (?, ?)', [id, userId])
+      await pool.query('UPDATE forum_posts SET likes = likes + 1 WHERE id = ?', [id])
+      
+      res.json({ 
+        success: true, 
+        message: '点赞成功',
+        liked: true
+      })
+    }
+  } catch (error) {
+    console.error('论坛帖子点赞操作失败:', error)
+    res.status(500).json({ success: false, message: '点赞操作失败', error: error.message })
+  }
+})
+
+// 论坛帖子收藏/取消收藏
+app.post('/api/forum/posts/:id/favorite', require('./middleware/auth').authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params
+    const userId = req.user.id
+    
+    // 检查帖子是否存在
+    const [postRows] = await pool.query('SELECT id FROM forum_posts WHERE id = ?', [id])
+    if (postRows.length === 0) {
+      return res.status(404).json({ success: false, message: '帖子不存在' })
+    }
+    
+    // 检查是否已收藏
+    const [existingFavorite] = await pool.query(
+      'SELECT id FROM forum_post_favorites WHERE post_id = ? AND user_id = ?',
+      [id, userId]
+    )
+    
+    if (existingFavorite.length > 0) {
+      // 取消收藏
+      await pool.query('DELETE FROM forum_post_favorites WHERE post_id = ? AND user_id = ?', [id, userId])
+      await pool.query('UPDATE forum_posts SET favorites_count = favorites_count - 1 WHERE id = ?', [id])
+      
+      res.json({ 
+        success: true, 
+        message: '取消收藏成功',
+        favorited: false
+      })
+    } else {
+      // 添加收藏
+      await pool.query('INSERT INTO forum_post_favorites (post_id, user_id) VALUES (?, ?)', [id, userId])
+      await pool.query('UPDATE forum_posts SET favorites_count = favorites_count + 1 WHERE id = ?', [id])
+      
+      res.json({ 
+        success: true, 
+        message: '收藏成功',
+        favorited: true
+      })
+    }
+  } catch (error) {
+    console.error('论坛帖子收藏操作失败:', error)
+    res.status(500).json({ success: false, message: '收藏操作失败', error: error.message })
+  }
+})
+
+// 获取论坛帖子详情
+app.get('/api/forum/posts/:id', async (req, res) => {
+  try {
+    const { id } = req.params
+    const token = req.headers.authorization
+    let userId = null
+    
+    // 如果用户已登录，获取用户ID
+    if (token) {
+      try {
+        const jwt = require('jsonwebtoken')
+        const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production'
+        const decoded = jwt.verify(token.split(' ')[1], JWT_SECRET)
+        userId = decoded.userId
+      } catch (error) {
+        // Token无效，继续作为未登录用户
+      }
+    }
+    
+    // 获取帖子信息
+    const [rows] = await pool.query(`
+      SELECT 
+        p.id,
+        p.title,
+        p.content,
+        p.category,
+        p.author_id,
+        p.views,
+        p.likes,
+        p.favorites_count,
+        p.comments_count,
+        p.created_at,
+        p.updated_at,
+        u.username as author_username,
+        u.nickname as author_nickname
+      FROM forum_posts p
+      LEFT JOIN users u ON p.author_id = u.id
+      WHERE p.id = ? AND p.status = 'published'
+    `, [id])
+    
+    if (rows.length === 0) {
+      return res.status(404).json({ success: false, message: '帖子不存在' })
+    }
+    
+    const post = rows[0]
+    
+    // 增加浏览量
+    await pool.query('UPDATE forum_posts SET views = views + 1 WHERE id = ?', [id])
+    post.views += 1
+    
+    // 如果用户已登录，检查是否已点赞和收藏
+    let userLiked = false
+    let userFavorited = false
+    
+    if (userId) {
+      const [likeRows] = await pool.query(
+        'SELECT id FROM forum_post_likes WHERE post_id = ? AND user_id = ?',
+        [id, userId]
+      )
+      userLiked = likeRows.length > 0
+      
+      const [favoriteRows] = await pool.query(
+        'SELECT id FROM forum_post_favorites WHERE post_id = ? AND user_id = ?',
+        [id, userId]
+      )
+      userFavorited = favoriteRows.length > 0
+    }
+    
+    res.json({
+      success: true,
+      data: {
+        ...post,
+        author: post.author_nickname || post.author_username || '匿名',
+        user_liked: userLiked,
+        user_favorited: userFavorited
+      }
+    })
+  } catch (error) {
+    console.error('获取论坛帖子详情失败:', error)
+    res.status(500).json({ success: false, message: '获取帖子详情失败', error: error.message })
+  }
+})
+
+// 获取论坛帖子评论列表
+app.get('/api/forum/posts/:id/comments', async (req, res) => {
+  try {
+    const { id } = req.params
+    const page = parseInt(req.query.page) || 1
+    const limit = parseInt(req.query.limit) || 10
+    const offset = (page - 1) * limit
+    
+    const [rows] = await pool.query(`
+      SELECT 
+        c.id,
+        c.content,
+        c.parent_id,
+        c.likes,
+        c.created_at,
+        u.id as user_id,
+        u.username,
+        u.nickname,
+        u.avatar
+      FROM forum_post_comments c
+      LEFT JOIN users u ON c.user_id = u.id
+      WHERE c.post_id = ? AND c.status = 'active'
+      ORDER BY c.created_at ASC
+      LIMIT ? OFFSET ?
+    `, [id, limit, offset])
+    
+    // 获取总评论数
+    const [countResult] = await pool.query(
+      'SELECT COUNT(*) as total FROM forum_post_comments WHERE post_id = ? AND status = "active"',
+      [id]
+    )
+    
+    res.json({
+      success: true,
+      data: {
+        comments: rows,
+        pagination: {
+          page,
+          limit,
+          total: countResult[0].total,
+          pages: Math.ceil(countResult[0].total / limit)
+        }
+      }
+    })
+  } catch (error) {
+    console.error('获取论坛评论失败:', error)
+    res.status(500).json({ success: false, message: '获取评论失败', error: error.message })
+  }
+})
+
+// 添加论坛帖子评论
+app.post('/api/forum/posts/:id/comments', require('./middleware/auth').authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params
+    const { content, parent_id } = req.body
+    const userId = req.user.id
+    
+    if (!content || content.trim().length === 0) {
+      return res.status(400).json({ success: false, message: '评论内容不能为空' })
+    }
+    
+    // 检查帖子是否存在
+    const [postRows] = await pool.query('SELECT id FROM forum_posts WHERE id = ?', [id])
+    if (postRows.length === 0) {
+      return res.status(404).json({ success: false, message: '帖子不存在' })
+    }
+    
+    // 如果有parent_id，检查父评论是否存在
+    if (parent_id) {
+      const [parentRows] = await pool.query(
+        'SELECT id FROM forum_post_comments WHERE id = ? AND post_id = ? AND status = "active"',
+        [parent_id, id]
+      )
+      if (parentRows.length === 0) {
+        return res.status(400).json({ success: false, message: '父评论不存在' })
+      }
+    }
+    
+    // 插入评论
+    const [result] = await pool.query(
+      'INSERT INTO forum_post_comments (post_id, user_id, content, parent_id) VALUES (?, ?, ?, ?)',
+      [id, userId, content.trim(), parent_id || null]
+    )
+    
+    // 更新帖子评论数
+    await pool.query('UPDATE forum_posts SET comments_count = comments_count + 1 WHERE id = ?', [id])
+    
+    // 获取新插入的评论信息
+    const [newComment] = await pool.query(`
+      SELECT 
+        c.id,
+        c.content,
+        c.parent_id,
+        c.likes,
+        c.created_at,
+        u.id as user_id,
+        u.username,
+        u.nickname,
+        u.avatar
+      FROM forum_post_comments c
+      LEFT JOIN users u ON c.user_id = u.id
+      WHERE c.id = ?
+    `, [result.insertId])
+    
+    res.status(201).json({
+      success: true,
+      message: '评论发表成功',
+      data: newComment[0]
+    })
+  } catch (error) {
+    console.error('发表论坛评论失败:', error)
+    res.status(500).json({ success: false, message: '发表评论失败', error: error.message })
+  }
+})
+
+// 获取用户论坛点赞列表
+app.get('/api/user/forum/likes', require('./middleware/auth').authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id
+    const page = parseInt(req.query.page) || 1
+    const limit = parseInt(req.query.limit) || 10
+    const offset = (page - 1) * limit
+    
+    const [rows] = await pool.query(`
+      SELECT 
+        p.id,
+        p.title,
+        p.content,
+        p.category,
+        p.cover,
+        p.views,
+        p.likes,
+        p.created_at,
+        fl.created_at as liked_at
+      FROM forum_post_likes fl
+      LEFT JOIN forum_posts p ON fl.post_id = p.id
+      WHERE fl.user_id = ?
+      ORDER BY fl.created_at DESC
+      LIMIT ? OFFSET ?
+    `, [userId, limit, offset])
+    
+    const [countResult] = await pool.query(
+      'SELECT COUNT(*) as total FROM forum_post_likes WHERE user_id = ?',
+      [userId]
+    )
+    
+    res.json({
+      success: true,
+      data: {
+        likes: rows,
+        pagination: {
+          page,
+          limit,
+          total: countResult[0].total,
+          pages: Math.ceil(countResult[0].total / limit)
+        }
+      }
+    })
+  } catch (error) {
+    console.error('获取用户论坛点赞失败:', error)
+    res.status(500).json({ success: false, message: '获取点赞列表失败', error: error.message })
+  }
+})
+
+// 获取用户论坛收藏列表
+app.get('/api/user/forum/favorites', require('./middleware/auth').authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id
+    const page = parseInt(req.query.page) || 1
+    const limit = parseInt(req.query.limit) || 10
+    const offset = (page - 1) * limit
+    
+    const [rows] = await pool.query(`
+      SELECT 
+        p.id,
+        p.title,
+        p.content,
+        p.category,
+        p.cover,
+        p.views,
+        p.likes,
+        p.created_at,
+        ff.created_at as favorited_at
+      FROM forum_post_favorites ff
+      LEFT JOIN forum_posts p ON ff.post_id = p.id
+      WHERE ff.user_id = ?
+      ORDER BY ff.created_at DESC
+      LIMIT ? OFFSET ?
+    `, [userId, limit, offset])
+    
+    const [countResult] = await pool.query(
+      'SELECT COUNT(*) as total FROM forum_post_favorites WHERE user_id = ?',
+      [userId]
+    )
+    
+    res.json({
+      success: true,
+      data: {
+        favorites: rows,
+        pagination: {
+          page,
+          limit,
+          total: countResult[0].total,
+          pages: Math.ceil(countResult[0].total / limit)
+        }
+      }
+    })
+  } catch (error) {
+    console.error('获取用户论坛收藏失败:', error)
+    res.status(500).json({ success: false, message: '获取收藏列表失败', error: error.message })
+  }
+})
+
+// 获取用户论坛评论列表
+app.get('/api/user/forum/comments', require('./middleware/auth').authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id
+    const page = parseInt(req.query.page) || 1
+    const limit = parseInt(req.query.limit) || 10
+    const offset = (page - 1) * limit
+    
+    const [rows] = await pool.query(`
+      SELECT 
+        fc.id,
+        fc.content,
+        fc.created_at,
+        p.id as post_id,
+        p.title as post_title,
+        p.category
+      FROM forum_post_comments fc
+      LEFT JOIN forum_posts p ON fc.post_id = p.id
+      WHERE fc.user_id = ? AND fc.status = ?
+      ORDER BY fc.created_at DESC
+      LIMIT ? OFFSET ?
+    `, [userId, 'active', limit, offset])
+    
+    const [countResult] = await pool.query(
+      'SELECT COUNT(*) as total FROM forum_post_comments WHERE user_id = ? AND status = ?',
+      [userId, 'active']
+    )
+    
+    res.json({
+      success: true,
+      data: {
+        comments: rows,
+        pagination: {
+          page,
+          limit,
+          total: countResult[0].total,
+          pages: Math.ceil(countResult[0].total / limit)
+        }
+      }
+    })
+  } catch (error) {
+    console.error('获取用户论坛评论失败:', error)
+    res.status(500).json({ success: false, message: '获取评论列表失败', error: error.message })
   }
 })
 
