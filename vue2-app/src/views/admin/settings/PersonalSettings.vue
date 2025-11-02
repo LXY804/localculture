@@ -22,7 +22,7 @@
               :before-upload="handleAvatarUpload"
             >
               <div class="avatar-preview">
-                <img v-if="profile.avatar" :src="profile.avatar" class="avatar-image" alt="头像">
+                <img v-if="profile.avatar" :src="getAvatarUrl(profile.avatar)" class="avatar-image" alt="头像">
                 <i v-else class="el-icon-plus avatar-uploader-icon"></i>
               </div>
             </el-upload>
@@ -285,23 +285,80 @@ export default {
       }
     },
     
-    handleAvatarUpload(file) {
+    async handleAvatarUpload(file) {
+      // 验证文件类型
+      const isImage = file.type.startsWith('image/');
+      if (!isImage) {
+        this.$message.error('只能上传图片文件！');
+        return false;
+      }
+      
+      // 验证文件大小（5MB）
+      const isLt5M = file.size / 1024 / 1024 < 5;
+      if (!isLt5M) {
+        this.$message.error('图片大小不能超过5MB！');
+        return false;
+      }
+      
+      // 先显示预览
       const reader = new FileReader();
       reader.onload = (e) => {
         this.profile.avatar = e.target.result;
-        this.$message.success('头像上传成功！');
       };
       reader.readAsDataURL(file);
-      return false;
+      
+      // 实际上传文件
+      try {
+        const { uploadAvatar } = await import('@/api/upload');
+        const response = await uploadAvatar(file);
+        
+        if (response.data && response.data.success) {
+          // 使用服务器返回的URL更新头像
+          const avatarUrl = response.data.avatarUrl;
+          
+          // 如果返回的是相对路径，需要转换为完整URL
+          if (avatarUrl.startsWith('/uploads/')) {
+            // 使用http工具的基础URL会自动处理
+            this.profile.avatar = avatarUrl;
+          } else {
+            this.profile.avatar = avatarUrl;
+          }
+          
+          // 如果服务器返回了更新后的用户信息，同步到store
+          if (response.data.user) {
+            await this.updateProfile(response.data.user);
+          }
+          
+          this.$message.success('头像上传成功！');
+        } else {
+          this.$message.error(response.data?.message || '头像上传失败');
+          // 上传失败，恢复之前的头像
+          await this.fetchProfile();
+        }
+      } catch (error) {
+        console.error('头像上传失败:', error);
+        this.$message.error(error.response?.data?.message || '头像上传失败，请重试');
+        // 上传失败，恢复之前的头像
+        await this.fetchProfile();
+      }
+      
+      return false; // 阻止默认上传行为
     },
     
     handleUploadAvatar() {
       this.$message.info('请点击上方头像区域上传新头像');
     },
     
-    removeAvatar() {
-      this.profile.avatar = '';
-      this.$message.info('头像已移除');
+    async removeAvatar() {
+      try {
+        // 更新头像为空
+        await this.updateProfile({ ...this.profile, avatar: null });
+        this.profile.avatar = '';
+        this.$message.success('头像已移除');
+      } catch (error) {
+        console.error('移除头像失败:', error);
+        this.$message.error('移除头像失败，请重试');
+      }
     },
     
     handleTwoFactorChange(value) {
@@ -362,6 +419,29 @@ export default {
     formatDate(dateString) {
       const date = new Date(dateString);
       return date.toLocaleString('zh-CN');
+    },
+    
+    getAvatarUrl(avatar) {
+      if (!avatar) return '';
+      
+      // 如果是完整的URL（http/https），直接返回
+      if (avatar.startsWith('http://') || avatar.startsWith('https://')) {
+        return avatar;
+      }
+      
+      // 如果是data URL（base64），直接返回
+      if (avatar.startsWith('data:image')) {
+        return avatar;
+      }
+      
+      // 如果是相对路径（/uploads/...），需要拼接后端服务器地址
+      if (avatar.startsWith('/uploads/')) {
+        // 静态资源直接访问后端服务器，不使用/api代理
+        return `http://localhost:3001${avatar}`;
+      }
+      
+      // 其他情况直接返回
+      return avatar;
     }
   },
   created() {

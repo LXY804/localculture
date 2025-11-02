@@ -239,6 +239,41 @@
       @close="handleDialogClose"
     >
       <el-form :model="userForm" :rules="rules" ref="userForm" label-width="80px">
+        <!-- 头像上传 -->
+        <el-form-item label="头像">
+          <div class="avatar-upload-section">
+            <div class="avatar-preview-wrapper">
+              <img 
+                v-if="userForm.avatar && userForm.avatar !== 'avatar'" 
+                :src="getAvatarUrl(userForm.avatar)" 
+                class="avatar-preview"
+                alt="头像预览"
+              />
+              <i v-else class="el-icon-user avatar-placeholder-large"></i>
+            </div>
+            <div class="avatar-upload-buttons">
+              <el-upload
+                action="/api/upload/avatar"
+                :headers="getUploadHeaders()"
+                :show-file-list="false"
+                :before-upload="beforeAvatarUpload"
+                :on-success="handleAvatarUploadSuccess"
+                :on-error="handleAvatarUploadError"
+              >
+                <el-button size="small" type="primary">上传头像</el-button>
+              </el-upload>
+              <el-button 
+                v-if="userForm.avatar" 
+                size="small" 
+                type="danger" 
+                @click="removeAvatar"
+              >
+                移除头像
+              </el-button>
+            </div>
+          </div>
+        </el-form-item>
+        
         <el-row :gutter="20">
           <el-col :span="12">
             <el-form-item label="用户名" prop="username">
@@ -408,6 +443,7 @@ export default {
         phone: '',
         role: 'user',
         password: '',
+        avatar: '',
         profile: {
           realName: '',
           gender: 'male',
@@ -534,6 +570,7 @@ export default {
       this.isEdit = true
       this.userForm = {
         ...row,
+        avatar: row.avatar || '',
         profile: { ...row.profile }
       }
       this.dialogVisible = true
@@ -712,7 +749,65 @@ export default {
     },
     handleAvatarError(event) {
       event.target.style.display = 'none'
-      event.target.nextElementSibling.style.display = 'inline-block'
+      if (event.target.nextElementSibling) {
+        event.target.nextElementSibling.style.display = 'inline-block'
+      }
+    },
+    getUploadHeaders() {
+      // 使用与http.js相同的token key
+      const token = localStorage.getItem('authToken') || this.$store.state.authToken
+      return token ? { Authorization: `Bearer ${token}` } : {}
+    },
+    getAvatarUrl(avatar) {
+      if (!avatar || avatar === 'avatar') return ''
+      // 如果是DataURL(base64)，直接返回
+      if (avatar.startsWith('data:image')) {
+        return avatar
+      }
+      // 如果已经是完整URL，直接返回
+      if (avatar.startsWith('http://') || avatar.startsWith('https://')) {
+        return avatar
+      }
+      // 如果是相对路径（如 /uploads/xxx），直接返回（因为静态文件服务器会处理）
+      if (avatar.startsWith('/')) {
+        return avatar
+      }
+      // 其他情况，尝试添加 /uploads 前缀
+      return `/uploads/${avatar}`
+    },
+    beforeAvatarUpload(file) {
+      const isImage = file.type.startsWith('image/')
+      const isLt5M = file.size / 1024 / 1024 < 5
+
+      if (!isImage) {
+        this.$message.error('只能上传图片文件！')
+        return false
+      }
+      if (!isLt5M) {
+        this.$message.error('头像大小不能超过 5MB！')
+        return false
+      }
+      return true
+    },
+    handleAvatarUploadSuccess(response) {
+      console.log('上传成功，响应数据:', response)
+      // el-upload 会自动解析响应，response 已经是对象了
+      if (response && response.success && response.avatarUrl) {
+        this.userForm.avatar = response.avatarUrl
+        console.log('设置头像URL:', response.avatarUrl)
+        this.$message.success('头像上传成功！')
+      } else {
+        console.error('上传响应格式错误:', response)
+        this.$message.error(response.message || '头像上传失败')
+      }
+    },
+    handleAvatarUploadError(error) {
+      console.error('头像上传失败:', error)
+      this.$message.error('头像上传失败，请重试')
+    },
+    removeAvatar() {
+      this.userForm.avatar = ''
+      this.$message.info('头像已移除')
     },
     showUserCard(user) {
       this.hoveredUser = user
@@ -972,6 +1067,46 @@ export default {
   font-size: 12px;
   color: #909399;
   font-weight: 500;
+}
+
+/* 头像上传区域样式 */
+.avatar-upload-section {
+  display: flex;
+  align-items: flex-start;
+  gap: 20px;
+}
+
+.avatar-preview-wrapper {
+  flex-shrink: 0;
+}
+
+.avatar-preview {
+  width: 100px;
+  height: 100px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid #e4e7ed;
+  display: block;
+}
+
+.avatar-placeholder-large {
+  width: 100px;
+  height: 100px;
+  border-radius: 50%;
+  background: #f5f7fa;
+  color: #c0c4cc;
+  font-size: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid #e4e7ed;
+}
+
+.avatar-upload-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 20px;
 }
 
 /* 头像样式 */

@@ -107,24 +107,43 @@ const actions = {
   async fetchProfile({ commit }) {
     commit('SET_LOADING', true)
     
-    // 模拟API调用
-    setTimeout(() => {
+    try {
+      const { getProfile } = await import('@/api/users')
+      const response = await getProfile()
+      
+      if (response.data && response.data.success && response.data.user) {
+        commit('SET_PROFILE', response.data.user)
+      }
+    } catch (error) {
+      console.error('获取用户信息失败:', error)
+      throw error
+    } finally {
       commit('SET_LOADING', false)
-    }, 300)
+    }
   },
   
   async updateProfile({ commit }, profile) {
-    commit('SET_PROFILE', profile)
-    
-    // 记录操作日志
-    const log = {
-      id: Date.now(),
-      action: '更新个人资料',
-      operator: 'admin',
-      time: new Date().toLocaleString(),
-      details: '修改了个人资料信息'
+    try {
+      const { updateProfile } = await import('@/api/users')
+      const response = await updateProfile(profile)
+      
+      if (response.data && response.data.success && response.data.user) {
+        commit('SET_PROFILE', response.data.user)
+      }
+      
+      // 记录操作日志
+      const log = {
+        id: Date.now(),
+        action: '更新个人资料',
+        operator: 'admin',
+        time: new Date().toLocaleString(),
+        details: '修改了个人资料信息'
+      }
+      commit('ADD_OPERATION_LOG', log)
+    } catch (error) {
+      console.error('更新用户信息失败:', error)
+      throw error
     }
-    commit('ADD_OPERATION_LOG', log)
   },
   
   async fetchOperationLogs({ commit }) {

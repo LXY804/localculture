@@ -69,23 +69,51 @@ app.use((req, res, next) => {
         } catch (e) {
           // 忽略token错误
         }
-        const sessionId = req.sessionID || req.headers['x-session-id'] || null
         
-        await pool.query(`
-          INSERT INTO visit_logs (user_id, ip_address, user_agent, page_path, referer, session_id)
-          VALUES (?, ?, ?, ?, ?, ?)
-        `, [
-          userId,
-          ipAddress,
-          userAgent,
-          req.path,
-          req.headers.referer || null,
-          sessionId
-        ])
+        // 生成或获取session ID（用于去重）
+        let sessionId = req.sessionID || req.headers['x-session-id']
+        if (!sessionId) {
+          // 如果没有session，基于IP和时间生成一个临时ID（同一天相同IP只记录一次）
+          const today = new Date().toISOString().split('T')[0]
+          sessionId = `temp_${ipAddress.replace(/[^a-zA-Z0-9]/g, '_')}_${today}`
+        }
+        
+        // 检查今天是否已经记录过这个session或用户（避免同一session/用户重复计数）
+        const today = new Date()
+        today.setHours(0, 0, 0, 0)
+        const tomorrow = new Date(today)
+        tomorrow.setDate(tomorrow.getDate() + 1)
+        
+        const [existing] = await pool.query(`
+          SELECT COUNT(*) as count 
+          FROM visit_logs 
+          WHERE (
+            (session_id = ? AND session_id IS NOT NULL)
+            OR (user_id = ? AND user_id IS NOT NULL)
+            OR (session_id IS NULL AND user_id IS NULL AND ip_address = ?)
+          )
+            AND created_at >= ? AND created_at < ?
+          LIMIT 1
+        `, [sessionId, userId, ipAddress, today, tomorrow])
+        
+        // 如果今天还没有记录过，才插入新记录
+        if (existing[0].count === 0) {
+          await pool.query(`
+            INSERT INTO visit_logs (user_id, ip_address, user_agent, page_path, referer, session_id)
+            VALUES (?, ?, ?, ?, ?, ?)
+          `, [
+            userId,
+            ipAddress,
+            userAgent,
+            req.path,
+            req.headers.referer || null,
+            sessionId
+          ])
+        }
       } catch (error) {
         // 忽略访问日志记录错误，不影响正常请求
         if (error.code !== 'ER_NO_SUCH_TABLE') {
-          console.warn('记录访问日志失败（表可能不存在）:', error.message)
+          console.warn('记录访问日志失败:', error.message)
         }
       }
     })
@@ -96,25 +124,86 @@ app.use((req, res, next) => {
 // 使用认证路由
 app.use('/api/auth', authRoutes)
 
-// 头像上传接口
-app.post('/api/upload/avatar', upload.single('avatar'), async (req, res) => {
+// 头像上传接口 - Element UI 默认使用 'file' 作为字段名
+app.post('/api/upload/avatar', require('./middleware/auth').authenticateToken, upload.single('file'), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ message: '请选择要上传的头像文件' })
     }
     
-    // 生成头像URL
+    const userId = req.user.id
+    if (!userId) {
+      console.error('用户ID不存在，req.user:', req.user)
+      return res.status(401).json({ message: '用户未认证' })
+    }
+    
+    // 生成头像URL（相对路径，前端会自动拼接baseURL）
     const avatarUrl = `/uploads/${req.file.filename}`
+    
+    console.log(`[头像上传] 用户ID: ${userId}, 文件名: ${req.file.filename}, Avatar URL: ${avatarUrl}`)
+    
+    // 更新数据库中的avatar字段
+    const [updateResult] = await pool.query(
+      'UPDATE users SET avatar = ?, updated_at = NOW() WHERE id = ?',
+      [avatarUrl, userId]
+    )
+    
+    // 检查更新是否成功（mysql2返回的updateResult是OkPacket对象）
+    const affectedRows = updateResult.affectedRows || 0
+    if (affectedRows === 0) {
+      console.error(`[头像上传] 数据库更新失败: 用户ID ${userId} 不存在或未更新任何行`)
+      console.error(`[头像上传] UPDATE结果:`, JSON.stringify(updateResult))
+      
+      // 先检查用户是否存在
+      const [checkUser] = await pool.query('SELECT id FROM users WHERE id = ?', [userId])
+      if (checkUser.length === 0) {
+        return res.status(404).json({ message: `用户ID ${userId} 不存在` })
+      }
+      
+      return res.status(500).json({ message: '数据库更新失败，请联系管理员' })
+    }
+    
+    console.log(`[头像上传] 数据库更新成功: affectedRows = ${affectedRows}`)
+    
+    // 验证更新结果 - 查询更新后的avatar字段
+    const [users] = await pool.query(
+      'SELECT id, username, nickname, email, phone, role, status, avatar, created_at FROM users WHERE id = ?',
+      [userId]
+    )
+    
+    if (users.length === 0) {
+      console.error(`[头像上传] 验证失败: 无法找到用户ID ${userId}`)
+      return res.status(404).json({ message: '用户不存在' })
+    }
+    
+    const updatedAvatar = users[0].avatar
+    console.log(`[头像上传] 验证结果: avatar字段 = ${updatedAvatar}`)
+    
+    if (updatedAvatar !== avatarUrl) {
+      console.error(`[头像上传] 警告: avatar字段不匹配! 期望: ${avatarUrl}, 实际: ${updatedAvatar}`)
+    }
     
     res.json({
       success: true,
       message: '头像上传成功',
       avatarUrl: avatarUrl,
-      filename: req.file.filename
+      filename: req.file.filename,
+      user: users[0], // 返回更新后的用户信息
+      debug: {
+        userId: userId,
+        avatarUrl: avatarUrl,
+        dbAvatar: updatedAvatar,
+        affectedRows: affectedRows
+      }
     })
   } catch (error) {
-    console.error('头像上传失败:', error)
-    res.status(500).json({ message: '头像上传失败', error: error.message })
+    console.error('[头像上传] 发生错误:', error)
+    console.error('[头像上传] 错误堆栈:', error.stack)
+    res.status(500).json({ 
+      message: '头像上传失败', 
+      error: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    })
   }
 })
 
@@ -530,9 +619,9 @@ app.post('/api/articles', require('./middleware/auth').authenticateToken, async 
     try {
       // 1. 创建文章
       const [result] = await connection.query(
-        'INSERT INTO articles (title, content, category, status, visible, cover, views, likes, author_id) VALUES (?, ?, ?, ?, ?, ?, 0, 0, ?)',
-        [title, content, category, status, visible, cover, userId]
-      )
+      'INSERT INTO articles (title, content, category, status, visible, cover, views, likes, author_id) VALUES (?, ?, ?, ?, ?, ?, 0, 0, ?)',
+      [title, content, category, status, visible, cover, userId]
+    )
       
       const articleId = result.insertId
       
@@ -591,10 +680,10 @@ app.post('/api/articles', require('./middleware/auth').authenticateToken, async 
         JOIN tags t ON at.tag_id = t.id
         WHERE at.article_id = ?
       `, [articleId])
-      
-      res.json({
-        success: true,
-        message: '文章创建成功',
+    
+    res.json({ 
+      success: true, 
+      message: '文章创建成功',
         id: articleId,
         data: {
           ...articleRows[0],
@@ -716,8 +805,8 @@ app.put('/api/articles/:id', require('./middleware/auth').authenticateToken, asy
       }
       
       await connection.commit()
-      
-      res.json({ success: true, message: '文章更新成功' })
+    
+    res.json({ success: true, message: '文章更新成功' })
     } catch (error) {
       await connection.rollback()
       throw error
@@ -778,14 +867,14 @@ app.delete('/api/articles/:id', require('./middleware/auth').authenticateToken, 
       
       // 5. 删除文章
       const [result] = await connection.query('DELETE FROM articles WHERE id = ?', [id])
-      
-      if (result.affectedRows === 0) {
+    
+    if (result.affectedRows === 0) {
         await connection.rollback()
-        return res.status(404).json({ success: false, message: '文章删除失败' })
-      }
-      
+      return res.status(404).json({ success: false, message: '文章删除失败' })
+    }
+    
       await connection.commit()
-      res.json({ success: true, message: '文章删除成功' })
+    res.json({ success: true, message: '文章删除成功' })
     } catch (error) {
       await connection.rollback()
       throw error
@@ -2134,7 +2223,7 @@ app.post('/api/admin/update-activity-times', async (req, res) => {
 // 获取公告列表
 app.get('/api/announcements', async (req, res) => {
   try {
-    const role = req.query.role || 'user'
+      const role = req.query.role || 'user'
     let query = `
       SELECT 
         a.id, 
@@ -2678,7 +2767,7 @@ app.put('/api/users/:id', require('./middleware/auth').authenticateToken, async 
     }
     
     const { id } = req.params
-    const { username, nickname, email, phone, role, status, password } = req.body
+    const { username, nickname, email, phone, role, status, password, avatar } = req.body
     
     // 检查用户是否存在
     const [existing] = await pool.query('SELECT id FROM users WHERE id = ?', [id])
@@ -2742,6 +2831,11 @@ app.put('/api/users/:id', require('./middleware/auth').authenticateToken, async 
     if (password !== undefined && password) {
       updates.push('password = ?')
       values.push(password) // 实际应该加密密码
+    }
+    
+    if (avatar !== undefined) {
+      updates.push('avatar = ?')
+      values.push(avatar || null)
     }
     
     if (updates.length === 0) {
@@ -2817,9 +2911,10 @@ app.get('/api/dashboard/stats', require('./middleware/auth').authenticateToken, 
       return res.status(403).json({ message: '需要管理员权限' })
     }
     
-    // 获取总用户数
+    // 获取总用户数（确保返回数字类型）
     const [userCount] = await pool.query('SELECT COUNT(*) as total FROM users')
-    const totalUsers = userCount[0].total
+    const totalUsers = parseInt(userCount[0].total) || 0
+    console.log('Dashboard API - 总用户数:', totalUsers, '原始数据:', userCount[0])
     
     // 获取总文章数（已发布的）
     const [articleCount] = await pool.query('SELECT COUNT(*) as total FROM articles WHERE status = ?', ['published'])
@@ -2829,7 +2924,7 @@ app.get('/api/dashboard/stats', require('./middleware/auth').authenticateToken, 
     const [announcementCount] = await pool.query('SELECT COUNT(*) as total FROM announcements WHERE status = ?', ['published'])
     const totalAnnouncements = announcementCount[0].total
     
-    // 获取今日访问量
+    // 获取今日访问量（统计唯一访问会话，避免重复计数）
     let dailyVisits = 0
     try {
       const today = new Date()
@@ -2837,15 +2932,18 @@ app.get('/api/dashboard/stats', require('./middleware/auth').authenticateToken, 
       const tomorrow = new Date(today)
       tomorrow.setDate(tomorrow.getDate() + 1)
       
+      // 使用CONCAT来组合session_id和ip_address实现DISTINCT效果
       const [visitCount] = await pool.query(`
-        SELECT COUNT(DISTINCT session_id, ip_address) as total 
+        SELECT COUNT(DISTINCT CONCAT(COALESCE(session_id, ''), '-', COALESCE(ip_address, ''))) as total 
         FROM visit_logs 
         WHERE created_at >= ? AND created_at < ?
       `, [today, tomorrow])
       dailyVisits = visitCount[0].total || 0
     } catch (error) {
       // 如果visit_logs表不存在，使用fallback
-      console.warn('访问日志表不存在，使用默认值:', error.message)
+      if (error.code !== 'ER_NO_SUCH_TABLE') {
+        console.warn('获取访问量失败:', error.message)
+      }
     }
     
     res.json({
@@ -2885,15 +2983,36 @@ app.get('/api/dashboard/user-growth', require('./middleware/auth').authenticateT
     
     // 填充所有日期（即使没有用户注册）
     const result = []
+    const rowMap = {}
+    
+    // 将查询结果转换为Map，处理不同日期格式
+    rows.forEach(row => {
+      let dateStr
+      if (row.date) {
+        // date可能是Date对象、字符串或MySQL的Date类型
+        if (row.date instanceof Date) {
+          dateStr = row.date.toISOString().split('T')[0]
+        } else if (typeof row.date === 'string') {
+          // 处理 'YYYY-MM-DD' 格式
+          dateStr = row.date.split('T')[0].split(' ')[0]
+        } else {
+          // 处理MySQL返回的Date对象
+          dateStr = String(row.date).split('T')[0].split(' ')[0]
+        }
+        if (dateStr) {
+          rowMap[dateStr] = parseInt(row.count) || 0
+        }
+      }
+    })
+    
     for (let i = days - 1; i >= 0; i--) {
       const date = new Date(today)
       date.setDate(date.getDate() - i)
       const dateStr = date.toISOString().split('T')[0]
       
-      const dayData = rows.find(r => r.date.toISOString().split('T')[0] === dateStr)
       result.push({
         date: dateStr,
-        count: dayData ? dayData.count : 0
+        count: parseInt(rowMap[dateStr]) || 0
       })
     }
     

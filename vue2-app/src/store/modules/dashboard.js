@@ -43,19 +43,28 @@ const mutations = {
 
 const actions = {
   async fetchDashboardData({ commit, dispatch, rootState }) {
+    // 获取用户信息（从根store获取userProfile）
+    const user = rootState.userProfile
+    
     try {
       // 从API获取统计数据（如果已登录且是管理员）
-      const user = rootState.user?.currentUser
       if (user && user.role === 'admin') {
         try {
           const statsRes = await getDashboardStats()
-          if (statsRes.data) {
-            commit('SET_STATS', {
-              totalUsers: statsRes.data.totalUsers || 0,
-              totalArticles: statsRes.data.totalArticles || 0,
-              totalAnnouncements: statsRes.data.totalAnnouncements || 0,
-              dailyVisits: statsRes.data.dailyVisits || 0
-            })
+          console.log('Dashboard API原始响应:', statsRes)
+          if (statsRes && statsRes.data) {
+            console.log('Dashboard API数据:', statsRes.data)
+            const updatedStats = {
+              totalUsers: parseInt(statsRes.data.totalUsers) || 0,
+              totalArticles: parseInt(statsRes.data.totalArticles) || 0,
+              totalAnnouncements: parseInt(statsRes.data.totalAnnouncements) || 0,
+              dailyVisits: parseInt(statsRes.data.dailyVisits) || 0
+            }
+            commit('SET_STATS', updatedStats)
+            console.log('Dashboard统计已更新:', updatedStats)
+          } else {
+            console.warn('Dashboard API返回数据格式不正确:', statsRes)
+            await dispatch('fetchDashboardDataFallback')
           }
         } catch (error) {
           console.warn('获取统计数据API失败，使用fallback方式:', error)
@@ -99,24 +108,30 @@ const actions = {
 
     // 图表：用户增长（从API获取真实数据）
     let userGrowth = []
-    try {
-      if (user && user.role === 'admin') {
+    if (user && user.role === 'admin') {
+      try {
         const growthRes = await getUserGrowth(7)
-        if (growthRes.data && Array.isArray(growthRes.data)) {
-          userGrowth = growthRes.data
+        if (growthRes && growthRes.data && Array.isArray(growthRes.data) && growthRes.data.length > 0) {
+          userGrowth = growthRes.data.map(item => ({
+            date: item.date || item.dateStr,
+            count: parseInt(item.count) || 0
+          }))
         }
+      } catch (error) {
+        console.warn('获取用户增长趋势失败，使用空数据:', error)
       }
-    } catch (error) {
-      console.warn('获取用户增长趋势失败，使用空数据:', error)
     }
     
-    // 如果API失败，使用空数据（而不是随机数据）
+    // 如果API失败或数据为空，填充空数据
     if (userGrowth.length === 0) {
       const today = new Date()
       userGrowth = Array.from({ length: 7 }).map((_, idx) => {
         const d = new Date(today.getFullYear(), today.getMonth(), today.getDate() - (6 - idx))
         const p = (n) => String(n).padStart(2, '0')
-        return { date: `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`, count: 0 }
+        return { 
+          date: `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`, 
+          count: 0 
+        }
       })
     }
 
@@ -161,22 +176,46 @@ const actions = {
     if (!rootState.announcements || (rootState.announcements.list || []).length === 0) {
       await dispatch('announcements/fetchAnnouncements', null, { root: true })
     }
+    
     // 尝试加载用户列表（如果是管理员）
-    const user = rootState.user?.currentUser
+    const user = rootState.userProfile
+    let totalUsers = 0
+    let dailyVisits = 0
+    
     if (user && user.role === 'admin') {
       try {
-        if (!rootState.users || (rootState.users.list || []).length === 0) {
-          await dispatch('users/fetchUsers', null, { root: true })
+        // 尝试从API获取用户总数
+        const { getUserList } = require('@/api/users')
+        const userRes = await getUserList({ page: 1, pageSize: 1 })
+        if (userRes && userRes.data && typeof userRes.data.total === 'number') {
+          totalUsers = userRes.data.total
+        } else if (rootState.users && rootState.users.list) {
+          // 如果API返回格式不对，使用store中的数据
+          totalUsers = rootState.users.list.length
         }
       } catch (error) {
-        console.warn('加载用户列表失败:', error)
+        console.warn('获取用户总数失败:', error)
+        // 如果API失败，尝试从store获取
+        if (rootState.users && rootState.users.list) {
+          totalUsers = rootState.users.list.length
+        }
+      }
+      
+      // 访问量保持为0或从API获取（避免随机数）
+      try {
+        const { getDashboardStats } = require('@/api/dashboard')
+        const statsRes = await getDashboardStats()
+        if (statsRes && statsRes.data) {
+          dailyVisits = statsRes.data.dailyVisits || 0
+        }
+      } catch (error) {
+        // 如果获取失败，保持为0
+        console.warn('获取访问量失败:', error)
       }
     }
 
     const articles = (rootState.articles && rootState.articles.list) || []
     const announcements = (rootState.announcements && rootState.announcements.list) || []
-    const totalUsers = (rootState.users && rootState.users.list && rootState.users.list.length) || 0
-    const dailyVisits = Math.round(500 + Math.random() * 1200)
 
     // 统计
     commit('SET_STATS', {
