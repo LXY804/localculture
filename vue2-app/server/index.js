@@ -126,38 +126,86 @@ app.use('/api/auth', authRoutes)
 
 // 头像上传接口 - Element UI 默认使用 'file' 作为字段名
 app.post('/api/upload/avatar', require('./middleware/auth').authenticateToken, upload.single('file'), async (req, res) => {
+  let savedFilePath = null // 用于跟踪已保存的文件路径，以便回滚
+  
   try {
+    // ========== 步骤1: 验证文件上传 ==========
     if (!req.file) {
       return res.status(400).json({ message: '请选择要上传的头像文件' })
     }
     
+    // ========== 步骤2: 验证用户认证 ==========
     const userId = req.user.id
     if (!userId) {
-      console.error('用户ID不存在，req.user:', req.user)
+      console.error('[头像上传] 用户ID不存在，req.user:', req.user)
       return res.status(401).json({ message: '用户未认证' })
     }
     
-    // 生成头像URL（相对路径，前端会自动拼接baseURL）
+    // ========== 步骤3: 文件已由multer保存到uploads文件夹 ==========
+    savedFilePath = path.join(__dirname, 'uploads', req.file.filename)
     const avatarUrl = `/uploads/${req.file.filename}`
     
-    console.log(`[头像上传] 用户ID: ${userId}, 文件名: ${req.file.filename}, Avatar URL: ${avatarUrl}`)
+    console.log(`[头像上传] 开始处理 - 用户ID: ${userId}, 文件名: ${req.file.filename}`)
+    console.log(`[头像上传] 文件保存路径: ${savedFilePath}`)
+    console.log(`[头像上传] Avatar URL: ${avatarUrl}`)
     
-    // 更新数据库中的avatar字段
-    const [updateResult] = await pool.query(
-      'UPDATE users SET avatar = ?, updated_at = NOW() WHERE id = ?',
-      [avatarUrl, userId]
-    )
+    // ========== 步骤4: 检查用户是否存在 ==========
+    const [checkUser] = await pool.query('SELECT id, avatar as oldAvatar FROM users WHERE id = ?', [userId])
+    if (checkUser.length === 0) {
+      console.error(`[头像上传] 用户不存在: ID ${userId}`)
+      // 删除已保存的文件
+      try {
+        if (fs.existsSync(savedFilePath)) {
+          fs.unlinkSync(savedFilePath)
+          console.log(`[头像上传] 已删除文件（用户不存在）: ${savedFilePath}`)
+        }
+      } catch (deleteError) {
+        console.error(`[头像上传] 删除文件失败:`, deleteError)
+      }
+      return res.status(404).json({ message: `用户ID ${userId} 不存在` })
+    }
     
-    // 检查更新是否成功（mysql2返回的updateResult是OkPacket对象）
+    const oldAvatar = checkUser[0].oldAvatar
+    const oldAvatarPath = oldAvatar && oldAvatar.startsWith('/uploads/') 
+      ? path.join(__dirname, oldAvatar) 
+      : null
+    
+    // ========== 步骤5: 更新数据库中的avatar字段 ==========
+    console.log(`[头像上传] 开始更新数据库...`)
+    let updateResult
+    try {
+      [updateResult] = await pool.query(
+        'UPDATE users SET avatar = ?, updated_at = NOW() WHERE id = ?',
+        [avatarUrl, userId]
+      )
+    } catch (dbError) {
+      console.error('[头像上传] 数据库更新异常:', dbError)
+      // 数据库更新失败，删除已保存的文件
+      try {
+        if (fs.existsSync(savedFilePath)) {
+          fs.unlinkSync(savedFilePath)
+          console.log(`[头像上传] 已删除文件（数据库更新失败）: ${savedFilePath}`)
+        }
+      } catch (deleteError) {
+        console.error(`[头像上传] 删除文件失败:`, deleteError)
+      }
+      throw dbError // 重新抛出错误，由外层catch处理
+    }
+    
+    // ========== 步骤6: 验证数据库更新结果 ==========
     const affectedRows = updateResult.affectedRows || 0
     if (affectedRows === 0) {
-      console.error(`[头像上传] 数据库更新失败: 用户ID ${userId} 不存在或未更新任何行`)
+      console.error(`[头像上传] 数据库更新失败: affectedRows = 0`)
       console.error(`[头像上传] UPDATE结果:`, JSON.stringify(updateResult))
       
-      // 先检查用户是否存在
-      const [checkUser] = await pool.query('SELECT id FROM users WHERE id = ?', [userId])
-      if (checkUser.length === 0) {
-        return res.status(404).json({ message: `用户ID ${userId} 不存在` })
+      // 数据库更新失败，删除已保存的文件
+      try {
+        if (fs.existsSync(savedFilePath)) {
+          fs.unlinkSync(savedFilePath)
+          console.log(`[头像上传] 已删除文件（affectedRows = 0）: ${savedFilePath}`)
+        }
+      } catch (deleteError) {
+        console.error(`[头像上传] 删除文件失败:`, deleteError)
       }
       
       return res.status(500).json({ message: '数据库更新失败，请联系管理员' })
@@ -165,7 +213,7 @@ app.post('/api/upload/avatar', require('./middleware/auth').authenticateToken, u
     
     console.log(`[头像上传] 数据库更新成功: affectedRows = ${affectedRows}`)
     
-    // 验证更新结果 - 查询更新后的avatar字段
+    // ========== 步骤7: 验证更新后的数据 ==========
     const [users] = await pool.query(
       'SELECT id, username, nickname, email, phone, role, status, avatar, created_at FROM users WHERE id = ?',
       [userId]
@@ -173,6 +221,15 @@ app.post('/api/upload/avatar', require('./middleware/auth').authenticateToken, u
     
     if (users.length === 0) {
       console.error(`[头像上传] 验证失败: 无法找到用户ID ${userId}`)
+      // 这种情况不应该发生，但为安全起见，删除文件并回滚数据库
+      try {
+        if (fs.existsSync(savedFilePath)) {
+          fs.unlinkSync(savedFilePath)
+          console.log(`[头像上传] 已删除文件（验证失败）: ${savedFilePath}`)
+        }
+      } catch (deleteError) {
+        console.error(`[头像上传] 删除文件失败:`, deleteError)
+      }
       return res.status(404).json({ message: '用户不存在' })
     }
     
@@ -181,7 +238,21 @@ app.post('/api/upload/avatar', require('./middleware/auth').authenticateToken, u
     
     if (updatedAvatar !== avatarUrl) {
       console.error(`[头像上传] 警告: avatar字段不匹配! 期望: ${avatarUrl}, 实际: ${updatedAvatar}`)
+      // 即使不匹配也不删除文件，因为可能只是查询时机问题
     }
+    
+    // ========== 步骤8: 删除旧头像文件（如果存在）==========
+    if (oldAvatarPath && fs.existsSync(oldAvatarPath) && oldAvatarPath !== savedFilePath) {
+      try {
+        fs.unlinkSync(oldAvatarPath)
+        console.log(`[头像上传] 已删除旧头像文件: ${oldAvatarPath}`)
+      } catch (deleteError) {
+        console.warn(`[头像上传] 删除旧头像文件失败（不影响新头像）:`, deleteError.message)
+      }
+    }
+    
+    // ========== 步骤9: 返回成功响应 ==========
+    console.log(`[头像上传] 流程完成 - 用户ID: ${userId}, 新头像: ${avatarUrl}`)
     
     res.json({
       success: true,
@@ -189,17 +260,201 @@ app.post('/api/upload/avatar', require('./middleware/auth').authenticateToken, u
       avatarUrl: avatarUrl,
       filename: req.file.filename,
       user: users[0], // 返回更新后的用户信息
-      debug: {
+      debug: process.env.NODE_ENV === 'development' ? {
         userId: userId,
         avatarUrl: avatarUrl,
         dbAvatar: updatedAvatar,
-        affectedRows: affectedRows
-      }
+        affectedRows: affectedRows,
+        oldAvatar: oldAvatar
+      } : undefined
     })
+    
   } catch (error) {
+    // ========== 错误处理: 清理已保存的文件 ==========
     console.error('[头像上传] 发生错误:', error)
     console.error('[头像上传] 错误堆栈:', error.stack)
+    
+    // 如果文件已保存但流程失败，删除文件
+    if (savedFilePath && fs.existsSync(savedFilePath)) {
+      try {
+        fs.unlinkSync(savedFilePath)
+        console.log(`[头像上传] 已删除文件（异常处理）: ${savedFilePath}`)
+      } catch (deleteError) {
+        console.error(`[头像上传] 删除文件失败:`, deleteError)
+      }
+    }
+    
     res.status(500).json({ 
+      success: false,
+      message: '头像上传失败', 
+      error: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    })
+  }
+})
+
+// 管理员为指定用户上传头像接口（需要管理员权限）
+// 注意：这个路由必须在 /api/users/:id 之前定义，因为更具体的路由应该优先匹配
+app.post('/api/users/:userId/avatar', require('./middleware/auth').authenticateToken, upload.single('file'), async (req, res) => {
+  let savedFilePath = null // 用于跟踪已保存的文件路径，以便回滚
+  
+  try {
+    // ========== 步骤1: 验证管理员权限 ==========
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ message: '需要管理员权限' })
+    }
+    
+    // ========== 步骤2: 验证文件上传 ==========
+    if (!req.file) {
+      return res.status(400).json({ message: '请选择要上传的头像文件' })
+    }
+    
+    // ========== 步骤3: 获取目标用户ID ==========
+    const targetUserId = parseInt(req.params.userId)
+    if (!targetUserId || isNaN(targetUserId)) {
+      return res.status(400).json({ message: '无效的用户ID' })
+    }
+    
+    // ========== 步骤4: 文件已由multer保存到uploads文件夹 ==========
+    savedFilePath = path.join(__dirname, 'uploads', req.file.filename)
+    const avatarUrl = `/uploads/${req.file.filename}`
+    
+    console.log(`[管理员头像上传] 开始处理 - 目标用户ID: ${targetUserId}, 操作者: ${req.user.id}, 文件名: ${req.file.filename}`)
+    console.log(`[管理员头像上传] 文件保存路径: ${savedFilePath}`)
+    console.log(`[管理员头像上传] Avatar URL: ${avatarUrl}`)
+    
+    // ========== 步骤5: 检查目标用户是否存在 ==========
+    const [checkUser] = await pool.query('SELECT id, avatar as oldAvatar FROM users WHERE id = ?', [targetUserId])
+    if (checkUser.length === 0) {
+      console.error(`[管理员头像上传] 目标用户不存在: ID ${targetUserId}`)
+      // 删除已保存的文件
+      try {
+        if (fs.existsSync(savedFilePath)) {
+          fs.unlinkSync(savedFilePath)
+          console.log(`[管理员头像上传] 已删除文件（用户不存在）: ${savedFilePath}`)
+        }
+      } catch (deleteError) {
+        console.error(`[管理员头像上传] 删除文件失败:`, deleteError)
+      }
+      return res.status(404).json({ message: `用户ID ${targetUserId} 不存在` })
+    }
+    
+    const oldAvatar = checkUser[0].oldAvatar
+    const oldAvatarPath = oldAvatar && oldAvatar.startsWith('/uploads/') 
+      ? path.join(__dirname, oldAvatar) 
+      : null
+    
+    // ========== 步骤6: 更新数据库中的avatar字段 ==========
+    console.log(`[管理员头像上传] 开始更新数据库...`)
+    let updateResult
+    try {
+      [updateResult] = await pool.query(
+        'UPDATE users SET avatar = ?, updated_at = NOW() WHERE id = ?',
+        [avatarUrl, targetUserId]
+      )
+    } catch (dbError) {
+      console.error('[管理员头像上传] 数据库更新异常:', dbError)
+      // 数据库更新失败，删除已保存的文件
+      try {
+        if (fs.existsSync(savedFilePath)) {
+          fs.unlinkSync(savedFilePath)
+          console.log(`[管理员头像上传] 已删除文件（数据库更新失败）: ${savedFilePath}`)
+        }
+      } catch (deleteError) {
+        console.error(`[管理员头像上传] 删除文件失败:`, deleteError)
+      }
+      throw dbError // 重新抛出错误，由外层catch处理
+    }
+    
+    // ========== 步骤7: 验证数据库更新结果 ==========
+    const affectedRows = updateResult.affectedRows || 0
+    if (affectedRows === 0) {
+      console.error(`[管理员头像上传] 数据库更新失败: affectedRows = 0`)
+      
+      // 数据库更新失败，删除已保存的文件
+      try {
+        if (fs.existsSync(savedFilePath)) {
+          fs.unlinkSync(savedFilePath)
+          console.log(`[管理员头像上传] 已删除文件（affectedRows = 0）: ${savedFilePath}`)
+        }
+      } catch (deleteError) {
+        console.error(`[管理员头像上传] 删除文件失败:`, deleteError)
+      }
+      
+      return res.status(500).json({ message: '数据库更新失败，请联系管理员' })
+    }
+    
+    console.log(`[管理员头像上传] 数据库更新成功: affectedRows = ${affectedRows}`)
+    
+    // ========== 步骤8: 验证更新后的数据 ==========
+    const [users] = await pool.query(
+      'SELECT id, username, nickname, email, phone, role, status, avatar, created_at FROM users WHERE id = ?',
+      [targetUserId]
+    )
+    
+    if (users.length === 0) {
+      console.error(`[管理员头像上传] 验证失败: 无法找到用户ID ${targetUserId}`)
+      // 这种情况不应该发生，但为安全起见，删除文件
+      try {
+        if (fs.existsSync(savedFilePath)) {
+          fs.unlinkSync(savedFilePath)
+          console.log(`[管理员头像上传] 已删除文件（验证失败）: ${savedFilePath}`)
+        }
+      } catch (deleteError) {
+        console.error(`[管理员头像上传] 删除文件失败:`, deleteError)
+      }
+      return res.status(404).json({ message: '用户不存在' })
+    }
+    
+    const updatedAvatar = users[0].avatar
+    console.log(`[管理员头像上传] 验证结果: avatar字段 = ${updatedAvatar}`)
+    
+    // ========== 步骤9: 删除旧头像文件（如果存在）==========
+    if (oldAvatarPath && fs.existsSync(oldAvatarPath) && oldAvatarPath !== savedFilePath) {
+      try {
+        fs.unlinkSync(oldAvatarPath)
+        console.log(`[管理员头像上传] 已删除旧头像文件: ${oldAvatarPath}`)
+      } catch (deleteError) {
+        console.warn(`[管理员头像上传] 删除旧头像文件失败（不影响新头像）:`, deleteError.message)
+      }
+    }
+    
+    // ========== 步骤10: 返回成功响应 ==========
+    console.log(`[管理员头像上传] 流程完成 - 目标用户ID: ${targetUserId}, 操作者: ${req.user.id}, 新头像: ${avatarUrl}`)
+    
+    res.json({
+      success: true,
+      message: '头像上传成功',
+      avatarUrl: avatarUrl,
+      filename: req.file.filename,
+      user: users[0], // 返回更新后的用户信息
+      debug: process.env.NODE_ENV === 'development' ? {
+        targetUserId: targetUserId,
+        operatorId: req.user.id,
+        avatarUrl: avatarUrl,
+        dbAvatar: updatedAvatar,
+        affectedRows: affectedRows,
+        oldAvatar: oldAvatar
+      } : undefined
+    })
+    
+  } catch (error) {
+    // ========== 错误处理: 清理已保存的文件 ==========
+    console.error('[管理员头像上传] 发生错误:', error)
+    console.error('[管理员头像上传] 错误堆栈:', error.stack)
+    
+    // 如果文件已保存但流程失败，删除文件
+    if (savedFilePath && fs.existsSync(savedFilePath)) {
+      try {
+        fs.unlinkSync(savedFilePath)
+        console.log(`[管理员头像上传] 已删除文件（异常处理）: ${savedFilePath}`)
+      } catch (deleteError) {
+        console.error(`[管理员头像上传] 删除文件失败:`, deleteError)
+      }
+    }
+    
+    res.status(500).json({ 
+      success: false,
       message: '头像上传失败', 
       error: error.message,
       stack: process.env.NODE_ENV === 'development' ? error.stack : undefined

@@ -122,8 +122,37 @@ const actions = {
     }
   },
   
-  async updateProfile({ commit }, profile) {
+  async updateProfile({ commit }, payload) {
     try {
+      // payload 可能是 profile 对象，也可能是 { profile, skipApi } 对象
+      let profile, skipApi
+      if (payload && typeof payload === 'object' && 'profile' in payload) {
+        // 新格式：{ profile, skipApi }
+        profile = payload.profile
+        skipApi = payload.skipApi || false
+      } else {
+        // 兼容旧格式：直接传递 profile 对象
+        profile = payload
+        skipApi = false
+      }
+      
+      // 如果 skipApi 为 true，直接更新 store，不调用 API
+      if (skipApi) {
+        commit('SET_PROFILE', profile)
+        
+        // 记录操作日志
+        const log = {
+          id: Date.now(),
+          action: '更新个人资料',
+          operator: 'admin',
+          time: new Date().toLocaleString(),
+          details: '修改了个人资料信息'
+        }
+        commit('ADD_OPERATION_LOG', log)
+        return
+      }
+      
+      // 否则调用 API 更新
       const { updateProfile } = await import('@/api/users')
       const response = await updateProfile(profile)
       

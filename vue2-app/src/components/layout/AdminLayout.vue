@@ -93,7 +93,7 @@
         <div class="header-right">
           <el-dropdown @command="handleCommand">
             <span class="user-info">
-              <img :src="userAvatar" alt="Avatar" class="user-avatar">
+              <img :src="getAvatarUrl(userAvatar)" alt="Avatar" class="user-avatar">
               <span class="username">{{ username }}</span>
               <i class="el-icon-arrow-down"></i>
             </span>
@@ -187,6 +187,29 @@ export default {
       } catch (error) {
         // 用户取消退出
       }
+    },
+    getAvatarUrl(avatar) {
+      if (!avatar || avatar === '/assets/logo.png') {
+        return '/assets/logo.png'
+      }
+      
+      // 如果是完整的URL（http/https），直接返回
+      if (avatar.startsWith('http://') || avatar.startsWith('https://')) {
+        return avatar
+      }
+      
+      // 如果是data URL（base64），直接返回
+      if (avatar.startsWith('data:image')) {
+        return avatar
+      }
+      
+      // 如果是相对路径（/uploads/...），需要拼接后端服务器地址
+      if (avatar.startsWith('/uploads/')) {
+        return `http://localhost:3001${avatar}`
+      }
+      
+      // 其他情况直接返回
+      return avatar
     }
   }
 }
@@ -333,6 +356,8 @@ export default {
   height: 32px;
   border-radius: 50%;
   margin-right: 8px;
+  object-fit: cover;
+  background-color: #f0f0f0;
 }
 
 .username {

@@ -312,31 +312,47 @@ export default {
         const { uploadAvatar } = await import('@/api/upload');
         const response = await uploadAvatar(file);
         
+        console.log('[前端] 上传响应:', response);
+        
         if (response.data && response.data.success) {
           // 使用服务器返回的URL更新头像
           const avatarUrl = response.data.avatarUrl;
+          console.log('[前端] 收到头像URL:', avatarUrl);
           
-          // 如果返回的是相对路径，需要转换为完整URL
-          if (avatarUrl.startsWith('/uploads/')) {
-            // 使用http工具的基础URL会自动处理
-            this.profile.avatar = avatarUrl;
-          } else {
-            this.profile.avatar = avatarUrl;
-          }
-          
-          // 如果服务器返回了更新后的用户信息，同步到store
+          // 如果服务器返回了更新后的用户信息，直接同步到store（跳过API调用，因为数据库已更新）
           if (response.data.user) {
-            await this.updateProfile(response.data.user);
+            console.log('[前端] 更新用户信息到store:', response.data.user);
+            // 使用 skipApi 选项，直接更新 store，不重复调用 API
+            await this.updateProfile({ profile: response.data.user, skipApi: true });
+            // 确保profile也更新
+            this.profile = { ...this.profile, ...response.data.user };
+          } else if (avatarUrl) {
+            // 如果没有返回完整用户信息，只更新头像
+            console.log('[前端] 仅更新头像到store:', avatarUrl);
+            const updatedProfile = { ...this.profile, avatar: avatarUrl };
+            await this.updateProfile({ profile: updatedProfile, skipApi: true });
+            this.profile.avatar = avatarUrl;
           }
+          
+          // 强制刷新profile数据，确保全局状态同步（从服务器获取最新数据）
+          await this.fetchProfile();
+          
+          // 强制更新视图
+          this.$forceUpdate();
+          
+          console.log('[前端] 当前profile.avatar:', this.profile.avatar);
+          console.log('[前端] 转换后的URL:', this.getAvatarUrl(this.profile.avatar));
           
           this.$message.success('头像上传成功！');
         } else {
+          console.error('[前端] 上传失败响应:', response.data);
           this.$message.error(response.data?.message || '头像上传失败');
           // 上传失败，恢复之前的头像
           await this.fetchProfile();
         }
       } catch (error) {
-        console.error('头像上传失败:', error);
+        console.error('[前端] 头像上传异常:', error);
+        console.error('[前端] 错误详情:', error.response?.data);
         this.$message.error(error.response?.data?.message || '头像上传失败，请重试');
         // 上传失败，恢复之前的头像
         await this.fetchProfile();
@@ -422,7 +438,9 @@ export default {
     },
     
     getAvatarUrl(avatar) {
-      if (!avatar) return '';
+      if (!avatar) {
+        return '';
+      }
       
       // 如果是完整的URL（http/https），直接返回
       if (avatar.startsWith('http://') || avatar.startsWith('https://')) {
