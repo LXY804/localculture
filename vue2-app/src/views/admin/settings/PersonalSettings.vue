@@ -22,7 +22,7 @@
               :before-upload="handleAvatarUpload"
             >
               <div class="avatar-preview">
-                <img v-if="profile.avatar" :src="profile.avatar" class="avatar-image" alt="头像">
+                <img v-if="profile.avatar" :src="getAvatarUrl(profile.avatar)" class="avatar-image" alt="头像">
                 <i v-else class="el-icon-plus avatar-uploader-icon"></i>
               </div>
             </el-upload>
@@ -285,23 +285,96 @@ export default {
       }
     },
     
-    handleAvatarUpload(file) {
+    async handleAvatarUpload(file) {
+      // 验证文件类型
+      const isImage = file.type.startsWith('image/');
+      if (!isImage) {
+        this.$message.error('只能上传图片文件！');
+        return false;
+      }
+      
+      // 验证文件大小（5MB）
+      const isLt5M = file.size / 1024 / 1024 < 5;
+      if (!isLt5M) {
+        this.$message.error('图片大小不能超过5MB！');
+        return false;
+      }
+      
+      // 先显示预览
       const reader = new FileReader();
       reader.onload = (e) => {
         this.profile.avatar = e.target.result;
-        this.$message.success('头像上传成功！');
       };
       reader.readAsDataURL(file);
-      return false;
+      
+      // 实际上传文件
+      try {
+        const { uploadAvatar } = await import('@/api/upload');
+        const response = await uploadAvatar(file);
+        
+        console.log('[前端] 上传响应:', response);
+        
+        if (response.data && response.data.success) {
+          // 使用服务器返回的URL更新头像
+          const avatarUrl = response.data.avatarUrl;
+          console.log('[前端] 收到头像URL:', avatarUrl);
+          
+          // 如果服务器返回了更新后的用户信息，直接同步到store（跳过API调用，因为数据库已更新）
+          if (response.data.user) {
+            console.log('[前端] 更新用户信息到store:', response.data.user);
+            // 使用 skipApi 选项，直接更新 store，不重复调用 API
+            await this.updateProfile({ profile: response.data.user, skipApi: true });
+            // 确保profile也更新
+            this.profile = { ...this.profile, ...response.data.user };
+          } else if (avatarUrl) {
+            // 如果没有返回完整用户信息，只更新头像
+            console.log('[前端] 仅更新头像到store:', avatarUrl);
+            const updatedProfile = { ...this.profile, avatar: avatarUrl };
+            await this.updateProfile({ profile: updatedProfile, skipApi: true });
+            this.profile.avatar = avatarUrl;
+          }
+          
+          // 强制刷新profile数据，确保全局状态同步（从服务器获取最新数据）
+          await this.fetchProfile();
+          
+          // 强制更新视图
+          this.$forceUpdate();
+          
+          console.log('[前端] 当前profile.avatar:', this.profile.avatar);
+          console.log('[前端] 转换后的URL:', this.getAvatarUrl(this.profile.avatar));
+          
+          this.$message.success('头像上传成功！');
+        } else {
+          console.error('[前端] 上传失败响应:', response.data);
+          this.$message.error(response.data?.message || '头像上传失败');
+          // 上传失败，恢复之前的头像
+          await this.fetchProfile();
+        }
+      } catch (error) {
+        console.error('[前端] 头像上传异常:', error);
+        console.error('[前端] 错误详情:', error.response?.data);
+        this.$message.error(error.response?.data?.message || '头像上传失败，请重试');
+        // 上传失败，恢复之前的头像
+        await this.fetchProfile();
+      }
+      
+      return false; // 阻止默认上传行为
     },
     
     handleUploadAvatar() {
       this.$message.info('请点击上方头像区域上传新头像');
     },
     
-    removeAvatar() {
-      this.profile.avatar = '';
-      this.$message.info('头像已移除');
+    async removeAvatar() {
+      try {
+        // 更新头像为空
+        await this.updateProfile({ ...this.profile, avatar: null });
+        this.profile.avatar = '';
+        this.$message.success('头像已移除');
+      } catch (error) {
+        console.error('移除头像失败:', error);
+        this.$message.error('移除头像失败，请重试');
+      }
     },
     
     handleTwoFactorChange(value) {
@@ -362,6 +435,31 @@ export default {
     formatDate(dateString) {
       const date = new Date(dateString);
       return date.toLocaleString('zh-CN');
+    },
+    
+    getAvatarUrl(avatar) {
+      if (!avatar) {
+        return '';
+      }
+      
+      // 如果是完整的URL（http/https），直接返回
+      if (avatar.startsWith('http://') || avatar.startsWith('https://')) {
+        return avatar;
+      }
+      
+      // 如果是data URL（base64），直接返回
+      if (avatar.startsWith('data:image')) {
+        return avatar;
+      }
+      
+      // 如果是相对路径（/uploads/...），需要拼接后端服务器地址
+      if (avatar.startsWith('/uploads/')) {
+        // 静态资源直接访问后端服务器，不使用/api代理
+        return `http://localhost:3001${avatar}`;
+      }
+      
+      // 其他情况直接返回
+      return avatar;
     }
   },
   created() {

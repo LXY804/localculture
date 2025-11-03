@@ -48,22 +48,21 @@ const router = new Router({
     // 后台管理路由
     {
       path: '/admin',
-      name: 'admin',
       component: Admin,
       meta: { requiresAuth: true, roles: ['admin'] },
-            children: [
-              { path: '', redirect: '/admin/dashboard' },
-              { path: 'dashboard', name: 'admin-dashboard', component: AdminDashboard },
-              { path: 'content', name: 'admin-content', component: ContentOverview },
-              { path: 'articles', name: 'admin-articles', component: ArticleList },
-              { path: 'announcements', name: 'admin-announcements', component: AnnouncementList },
-              { path: 'categories', name: 'admin-categories', component: CategoryManagement },
-              { path: 'tags', name: 'admin-tags', component: TagManagement },
-              { path: 'users', name: 'admin-users', component: UserList },
-              { path: 'settings/system', name: 'admin-settings-system', component: SystemConfig },
-              { path: 'settings/profile', name: 'admin-settings-profile', component: PersonalSettings },
-              // 其他管理页面路由将在后续添加
-            ]
+      children: [
+        { path: '', redirect: '/admin/dashboard' },
+        { path: 'dashboard', name: 'admin-dashboard', component: AdminDashboard },
+        { path: 'content', name: 'admin-content', component: ContentOverview },
+        { path: 'articles', name: 'admin-articles', component: ArticleList },
+        { path: 'announcements', name: 'admin-announcements', component: AnnouncementList },
+        { path: 'categories', name: 'admin-categories', component: CategoryManagement },
+        { path: 'tags', name: 'admin-tags', component: TagManagement },
+        { path: 'users', name: 'admin-users', component: UserList },
+        { path: 'settings/system', name: 'admin-settings-system', component: SystemConfig },
+        { path: 'settings/profile', name: 'admin-settings-profile', component: PersonalSettings },
+        // 其他管理页面路由将在后续添加
+      ]
     },
   ],
 })

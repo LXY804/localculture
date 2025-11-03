@@ -3,6 +3,7 @@
     <!-- 搜索区域 -->
     <div class="search-section">
       <input v-model="q" class="search-input" placeholder="搜索论坛帖子..." @keyup.enter="applyFilter" />
+      <button class="search-btn" @click="applyFilter">搜索</button>
     </div>
 
     
@@ -18,16 +19,29 @@
       <button v-for="c in categories" :key="c.key" class="tab" :class="{ active: c.key===current }" @click="switchCat(c.key)">{{ c.name }}</button>
     </div>
 
+    <!-- 排序选项 -->
+    <div class="sort-section">
+      <div class="sort-controls">
+        <span class="sort-label">排序方式：</span>
+        <select v-model="sortBy" @change="applySorting" class="sort-select">
+          <option value="latest">最新</option>
+          <option value="hottest">最热</option>
+          <option value="most_replied">回复最多</option>
+        </select>
+      </div>
+    </div>
+
       <div class="posts-list">
         <div v-for="p in presented" :key="p.id" class="post-card">
           <div class="post-header">
             <div class="post-info">
               <h3 class="post-title" @click="goToPostDetail(p.id)">{{ p.title }}</h3>
-              <p class="post-brief">{{ p.brief }}</p>
+              <p class="post-brief">{{ p.content ? p.content.substring(0, 100) + '...' : '暂无摘要' }}</p>
               <div class="post-meta">
                 <span class="post-author">作者：{{ p.author }}</span>
-                <span class="post-date">{{ formatDate(p.date) }}</span>
-                <span class="post-category">{{ getCategoryName(p.cat) }}</span>
+                <span class="post-date">{{ formatDate(p.created_at) }}</span>
+                <span class="post-category">{{ p.category || '未分类' }}</span>
+                <span class="post-stats">浏览：{{ p.views }} 点赞：{{ p.likes }} 评论：{{ p.comments_count }}</span>
               </div>
             </div>
           </div>
@@ -36,26 +50,33 @@
             <span class="tag" v-for="t in p.tags" :key="t"># {{ t }}</span>
           </div>
 
-          <div class="post-actions">
+          <div class="post-actions" v-if="isLoggedIn">
             <button 
               class="action-btn like-btn" 
-              :class="{ active: isLiked(p.id) }"
+              :class="{ active: isForumLiked(parseInt(p.id)) }"
               @click.stop="toggleLike(p.id)"
             >
               <span class="btn-icon">👍</span>
-              <span class="btn-text">{{ isLiked(p.id) ? '已赞' : '点赞' }}</span>
+              <span class="btn-text">{{ isForumLiked(parseInt(p.id)) ? '已赞' : '点赞' }}</span>
             </button>
             <button 
               class="action-btn favorite-btn" 
-              :class="{ active: isFavorited(p.id) }"
+              :class="{ active: isForumFavorited(parseInt(p.id)) }"
               @click.stop="toggleFavorite(p.id)"
             >
               <span class="btn-icon">⭐</span>
-              <span class="btn-text">{{ isFavorited(p.id) ? '已收藏' : '收藏' }}</span>
+              <span class="btn-text">{{ isForumFavorited(parseInt(p.id)) ? '已收藏' : '收藏' }}</span>
             </button>
             <button class="action-btn comment-btn" @click.stop="goToPostDetail(p.id)">
               <span class="btn-icon">💬</span>
-              <span class="btn-text">评论 ({{ getCommentCount(p.id) }})</span>
+              <span class="btn-text">评论 ({{ p.comments_count || 0 }})</span>
+            </button>
+        </div>
+        <div class="post-actions" v-else>
+            <span class="login-hint">登录后可点赞收藏</span>
+            <button class="action-btn comment-btn" @click.stop="goToPostDetail(p.id)">
+              <span class="btn-icon">💬</span>
+              <span class="btn-text">评论 ({{ p.comments_count || 0 }})</span>
             </button>
         </div>
         </div>
@@ -63,8 +84,8 @@
     </div>
 
     <!-- 发布帖子弹窗 -->
-    <BaseModal v-if="showPostModal" @close="showPostModal=false">
-      <h3>发布帖子</h3>
+    <BaseModal v-if="showPostModal" @close="handleClosePostModal">
+      <h3>{{ editingDraftId ? '编辑草稿' : '发布帖子' }}</h3>
       <div class="form-col">
         <label>主题分类
           <select v-model="newPost.cat">
@@ -78,7 +99,7 @@
           <textarea v-model="newPost.brief" rows="3" placeholder="简要描述你的观点"></textarea>
         </label>
         <div class="dialog-actions">
-          <button @click="submitPost">提交</button>
+          <button @click="submitPost" :disabled="!newPost.title.trim()">发布</button>
           <button class="ghost" @click="showPostModal=false">取消</button>
         </div>
       </div>
@@ -102,8 +123,8 @@
 
 <script>
 import BaseModal from '@/components/Modal.vue'
-import { mapGetters, mapActions } from 'vuex'
-import forumPosts from '@/data/forumPosts'
+import { mapGetters } from 'vuex'
+import axios from 'axios'
 
 export default {
   name: 'ForumPage',
@@ -112,6 +133,7 @@ export default {
     return {
       q: '',
       current: 'all',
+      sortBy: 'latest',
       categories: [
         { key: 'all', name: '全部' },
         { key: 'food', name: '美食' },
@@ -120,47 +142,115 @@ export default {
         { key: 'art', name: '艺术' },
       ],
       
-      posts: forumPosts,
+      posts: [],
       showPostModal: false,
       newPost: { cat: 'all', title: '', brief: '' },
       showReplyModal: false,
       replyTarget: null,
       replyText: '',
+      loading: false
     }
   },
+  async created() {
+    await this.fetchPosts()
+  },
+  activated() {
+    this.fetchPosts()
+  },
   computed: {
-    ...mapGetters(['isLiked', 'isFavorited', 'getCommentsByArticle']),
+    ...mapGetters(['isForumLiked', 'isForumFavorited', 'getCommentsByArticle']),
+    isLoggedIn() {
+      return !!localStorage.getItem('authToken')
+    },
     filtered() {
       const q = (this.q || '').toLowerCase()
       return this.posts.filter(p =>
-        (this.current==='all' || p.cat===this.current) &&
-        (!q || p.title.toLowerCase().includes(q) || (p.brief||'').toLowerCase().includes(q) || (p.tags||[]).some(t => t.toLowerCase().includes(q)))
+        (this.current==='all' || p.category===this.current) &&
+        (!q || p.title.toLowerCase().includes(q) || (p.content||'').toLowerCase().includes(q))
       )
     },
     presented() {
-      return [...this.filtered].sort((a,b)=> new Date(b.date)-new Date(a.date))
+      const sorted = [...this.filtered]
+      switch (this.sortBy) {
+        case 'latest':
+          return sorted.sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+        case 'hottest':
+          // 热度 = 浏览量 + 点赞数*2 + 评论数*3
+          return sorted.sort((a, b) => {
+            const hotA = (a.views || 0) + (a.likes || 0) * 2 + (a.comments_count || 0) * 3
+            const hotB = (b.views || 0) + (b.likes || 0) * 2 + (b.comments_count || 0) * 3
+            return hotB - hotA
+          })
+        case 'most_replied':
+          return sorted.sort((a, b) => {
+            const repliesA = a.comments_count || 0
+            const repliesB = b.comments_count || 0
+            return repliesB - repliesA
+          })
+        default:
+          return sorted
+      }
+    },
+    hasDraft() {
+      return this.newPost.title.trim() || this.newPost.brief.trim()
     }
   },
   methods: {
-    ...mapActions(['toggleLike', 'toggleFavorite']),
+    // 🆕 从数据库获取论坛帖子列表
+    async fetchPosts() {
+      this.loading = true
+      try {
+        const response = await axios.get('http://localhost:3001/api/forum/posts')
+        if (response.data.success) {
+          this.posts = response.data.data.posts
+        }
+      } catch (error) {
+        console.error('获取论坛帖子列表失败:', error)
+      } finally {
+        this.loading = false
+      }
+    },
+    
     switchCat(key) { this.current = key },
     applyFilter() {},
-    openPostModal() { this.showPostModal = true },
-    submitPost() {
+    applySorting() {
+      // 排序改变时重新计算
+    },
+    openPostModal() { 
+      this.showPostModal = true
+    },
+    async submitPost() {
       if (!this.newPost.title) return alert('请输入标题')
-      const post = {
-        id: 'f' + (Date.now()),
-        title: this.newPost.title,
-        brief: this.newPost.brief,
-        content: this.newPost.brief,
-        tags: [],
-        cat: this.newPost.cat || 'all',
-        author: this.$store.getters.username || '匿名用户',
-        date: new Date().toISOString(),
+      
+      const token = localStorage.getItem('authToken')
+      if (!token) {
+        alert('请先登录')
+        return
       }
-      this.posts.unshift(post)
-      this.showPostModal = false
-      this.newPost = { cat: this.current, title: '', brief: '' }
+      
+      try {
+        const response = await axios.post(
+          'http://localhost:3001/api/user/posts',
+          {
+            title: this.newPost.title,
+            content: this.newPost.brief,
+            category: this.newPost.cat === 'all' ? '未分类' : this.newPost.cat
+          },
+          {
+            headers: { Authorization: `Bearer ${token}` }
+          }
+        )
+        
+        if (response.data.success) {
+          alert('帖子发布成功！')
+          this.showPostModal = false
+          this.newPost = { cat: this.current, title: '', brief: '' }
+          await this.fetchPosts()
+        }
+      } catch (error) {
+        console.error('发布帖子失败:', error)
+        alert('发布失败，请重试')
+      }
     },
     openReplyModal(p) { this.replyTarget = p; this.replyText=''; this.showReplyModal = true },
     submitReply() {
@@ -171,21 +261,32 @@ export default {
       this.replyText = ''
     },
     formatDate(iso) {
+      if (!iso) return ''
       const d = new Date(iso); const p=n=>String(n).padStart(2,'0')
-      return `${d.getFullYear()}/${p(d.getMonth()+1)}/${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`
+      return `${d.getFullYear()}/${p(d.getMonth()+1)}/${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`
     },
-    getCategoryName(catKey) {
-      const category = this.categories.find(c => c.key === catKey)
-      return category ? category.name : '未知'
+    // 🆕 使用论坛专用的actions
+    async toggleLike(postId) {
+      try {
+        await this.$store.dispatch('toggleForumLike', parseInt(postId))
+        // 刷新帖子列表以更新UI
+        await this.fetchPosts()
+        // 触发数据更新事件
+        this.$root.$emit('userDataChanged', { type: 'forum-like' })
+      } catch (error) {
+        // 错误已在action中处理
+      }
     },
-    getCommentCount(postId) {
-      return this.$store.getters.getCommentsByArticle(postId).length
-    },
-    toggleLike(postId) {
-      this.$store.dispatch('toggleLike', postId)
-    },
-    toggleFavorite(postId) {
-      this.$store.dispatch('toggleFavorite', postId)
+    async toggleFavorite(postId) {
+      try {
+        await this.$store.dispatch('toggleForumFavorite', parseInt(postId))
+        // 刷新帖子列表以更新UI
+        await this.fetchPosts()
+        // 触发数据更新事件
+        this.$root.$emit('userDataChanged', { type: 'forum-favorite' })
+      } catch (error) {
+        // 错误已在action中处理
+      }
     },
     goToPostDetail(postId) {
       // 跳转到帖子详情页面
@@ -233,7 +334,7 @@ export default {
 
 .search-btn {
   padding: 12px 24px;
-  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
   color: white;
   border: none;
   border-radius: 8px;
@@ -241,11 +342,18 @@ export default {
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s ease;
+  white-space: nowrap;
 }
 
 .search-btn:hover {
   transform: translateY(-2px);
-  box-shadow: 0 8px 20px rgba(37, 99, 235, 0.3);
+  box-shadow: 0 8px 20px rgba(239, 68, 68, 0.3);
+  background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+}
+
+.search-btn:active {
+  transform: translateY(0);
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.2);
 }
 
 /* 热门话题区域 */
@@ -365,6 +473,43 @@ export default {
   border-bottom: 2px solid #e2e8f0;
   padding: 8px 0;
   margin-bottom: 20px;
+}
+
+/* 排序区域 */
+.sort-section {
+  margin-bottom: 20px;
+  padding: 16px;
+  background: #f8fafc;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+}
+
+.sort-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.sort-label {
+  font-weight: 500;
+  color: #374151;
+  font-size: 14px;
+}
+
+.sort-select {
+  padding: 6px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  background: #ffffff;
+  font-size: 14px;
+  cursor: pointer;
+  transition: border-color 0.2s ease;
+}
+
+.sort-select:focus {
+  outline: none;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
 }
 
 .tab {
@@ -535,9 +680,30 @@ export default {
   padding: 8px 10px; 
   border: 1px solid #e5e7eb; 
   border-radius: 6px; 
+  transition: border-color 0.2s ease;
+}
+.form-col input:focus, .form-col textarea:focus, .form-col select:focus {
+  outline: none;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
 }
 .dialog-actions { display: flex; gap: 8px; justify-content: flex-end; }
-.dialog-actions .ghost { background: #f3f4f6; border: 1px solid #e5e7eb; }
+.dialog-actions button {
+  padding: 8px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+.dialog-actions .ghost { 
+  background: #fff; 
+  border: 1px solid #e5e7eb; 
+  color: #374151;
+}
+.dialog-actions .ghost:hover {
+  background: #f3f4f6;
+}
 
 /* 响应式设计 */
 @media (max-width: 768px) {

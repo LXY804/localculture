@@ -28,29 +28,37 @@
         <header class="article-header">
           <h1 class="article-title">{{ article.title }}</h1>
           
-          <!-- 文章元信息 -->
-          <div class="article-meta">
-            <div class="meta-item">
-              <span class="meta-label">分类：</span>
-              <span class="meta-value">{{ article.category || '未分类' }}</span>
-            </div>
-            <div class="meta-item">
-              <span class="meta-label">发布时间：</span>
-              <span class="meta-value">{{ formatDate(article.created_at) }}</span>
-            </div>
-            <div class="meta-item">
-              <span class="meta-label">浏览量：</span>
-              <span class="meta-value">{{ article.views }}</span>
-            </div>
-            <div class="meta-item">
-              <span class="meta-label">点赞数：</span>
-              <span class="meta-value">{{ article.likes }}</span>
-            </div>
-            <div class="meta-item">
-              <span class="meta-label">评论数：</span>
-              <span class="meta-value">{{ article.comments_count }}</span>
-            </div>
+        <!-- 文章元信息 -->
+        <div class="article-meta">
+          <div class="meta-item">
+            <span class="meta-label">分类：</span>
+            <span class="meta-value">{{ article.category || '未分类' }}</span>
           </div>
+          <div class="meta-item">
+            <span class="meta-label">发布时间：</span>
+            <span class="meta-value">{{ formatDate(article.created_at) }}</span>
+          </div>
+          <div class="meta-item">
+            <span class="meta-label">浏览量：</span>
+            <span class="meta-value">{{ article.views }}</span>
+          </div>
+          <div class="meta-item">
+            <span class="meta-label">点赞数：</span>
+            <span class="meta-value">{{ article.likes }}</span>
+          </div>
+          <div class="meta-item">
+            <span class="meta-label">评论数：</span>
+            <span class="meta-value">{{ article.comments_count }}</span>
+          </div>
+        </div>
+
+        <!-- 文章操作按钮（只有作者可见） -->
+        <div v-if="canDeleteArticle" class="article-actions">
+          <button class="delete-article-btn" @click="deleteArticle">
+            <span class="btn-icon">🗑️</span>
+            删除文章
+          </button>
+        </div>
         </header>
 
         <!-- 文章正文 -->
@@ -156,6 +164,54 @@
             </div>
           </div>
         </div>
+
+        <!-- 分享功能 -->
+        <div class="share-section">
+          <h3 class="share-title">分享文章</h3>
+          <div class="share-buttons">
+            <button class="share-btn copy-btn" @click="copyLink">
+              <span class="share-icon">🔗</span>
+              复制链接
+            </button>
+            <button class="share-btn wechat-btn" @click="shareToWechat">
+              <span class="share-icon">💬</span>
+              微信分享
+            </button>
+            <button class="share-btn qq-btn" @click="shareToQQ">
+              <span class="share-icon">🐧</span>
+              QQ分享
+            </button>
+          </div>
+        </div>
+
+        <!-- 相关推荐 -->
+        <div class="related-section" v-if="relatedArticles.length > 0">
+          <h3 class="related-title">相关推荐</h3>
+          <div class="related-grid">
+            <div 
+              v-for="related in relatedArticles" 
+              :key="related.id"
+              class="related-card"
+              @click="goToArticle(related.id)"
+            >
+              <div class="related-cover" :style="{ backgroundImage: related.cover ? `url(${related.cover})` : 'none' }">
+                <div v-if="!related.cover" class="related-cover-placeholder">
+                  <span class="related-cover-icon">📄</span>
+                </div>
+              </div>
+              <div class="related-content">
+                <h4 class="related-card-title">{{ related.title }}</h4>
+                <p class="related-card-summary">{{ getRelatedSummary(related) }}</p>
+                <div class="related-card-meta">
+                  <span class="related-category">{{ related.category }}</span>
+                  <span class="related-stats">
+                    👁️ {{ related.views || 0 }} 👍 {{ related.likes || 0 }}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </template>
     
@@ -181,7 +237,8 @@ export default {
       replyOpenId: null,
       replyText: '',
       loading: true,
-      error: null
+      error: null,
+      relatedArticles: []
     }
   },
   computed: {
@@ -208,11 +265,38 @@ export default {
         map[c.parent_id].push(c)
       })
       return map
+    },
+    canDeleteArticle() {
+      if (!this.isLoggedIn || !this.article) return false
+      
+      // 获取当前用户信息
+      const currentUser = this.$store.state.userProfile
+      if (!currentUser) return false
+      
+      // 管理员可以删除任何文章
+      if (currentUser.role === 'admin') return true
+      
+      // 作者可以删除自己的文章
+      return this.article.author_id === currentUser.id
+    }
+  },
+  watch: {
+    // 监听路由参数变化，重新加载文章
+    '$route.params.id': {
+      handler(newId, oldId) {
+        if (newId && newId !== oldId) {
+          this.fetchArticleDetail()
+          this.fetchComments()
+          this.fetchRelatedArticles()
+        }
+      },
+      immediate: false
     }
   },
   async created() {
     await this.fetchArticleDetail()
     await this.fetchComments()
+    await this.fetchRelatedArticles()
   },
   methods: {
     async fetchArticleDetail() {
@@ -266,6 +350,8 @@ export default {
         if (response.data.success) {
           // 重新获取文章详情以获取最新数据
           await this.fetchArticleDetail()
+          // 触发数据更新事件
+          this.$root.$emit('userDataChanged', { type: 'like' })
           alert(response.data.message)
         }
       } catch (error) {
@@ -293,6 +379,8 @@ export default {
         if (response.data.success) {
           // 重新获取文章详情以获取最新数据
           await this.fetchArticleDetail()
+          // 触发数据更新事件
+          this.$root.$emit('userDataChanged', { type: 'favorite' })
           alert(response.data.message)
         }
       } catch (error) {
@@ -322,6 +410,8 @@ export default {
           await this.fetchArticleDetail()
           await this.fetchComments()
           this.newComment = ''
+          // 触发数据更新事件
+          this.$root.$emit('userDataChanged', { type: 'comment' })
           alert('评论发表成功！')
         }
       } catch (error) {
@@ -366,6 +456,126 @@ export default {
     openReplyFor(commentId) { 
       this.replyOpenId = commentId
       this.replyText = '' 
+    },
+    
+    async fetchRelatedArticles() {
+      try {
+        if (!this.article) return
+        
+        // 获取同分类的其他文章
+        const response = await axios.get(`http://localhost:3001/api/articles`, {
+          params: {
+            category: this.article.category,
+            exclude: this.articleId,
+            limit: 3
+          }
+        })
+        
+        this.relatedArticles = response.data.slice(0, 3)
+      } catch (error) {
+        console.error('获取相关文章失败:', error)
+        // 如果API失败，使用模拟数据
+        this.relatedArticles = [
+          {
+            id: 1,
+            title: '传统文化保护的重要性',
+            category: '传统文化',
+            cover: '/assets/craft.jpg',
+            views: 1200,
+            likes: 85
+          },
+          {
+            id: 2,
+            title: '民俗节庆的多样性',
+            category: '民俗节庆',
+            cover: '/assets/festival.jpg',
+            views: 980,
+            likes: 72
+          }
+        ]
+      }
+    },
+    
+    getRelatedSummary(article) {
+      if (article.summary) {
+        return article.summary.length > 80 ? article.summary.substring(0, 80) + '...' : article.summary
+      }
+      if (article.content) {
+        const text = article.content.replace(/<[^>]*>/g, '').trim()
+        return text.length > 80 ? text.substring(0, 80) + '...' : text
+      }
+      return '暂无摘要'
+    },
+    
+    goToArticle(articleId) {
+      // 跳转到新文章并重新加载数据
+      this.$router.push({ name: 'article-detail', params: { id: articleId } })
+      // 滚动到顶部
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+    },
+    
+    async copyLink() {
+      try {
+        const url = window.location.href
+        await navigator.clipboard.writeText(url)
+        alert('链接已复制到剪贴板！')
+      } catch (error) {
+        // 降级方案
+        const textArea = document.createElement('textarea')
+        textArea.value = window.location.href
+        document.body.appendChild(textArea)
+        textArea.select()
+        document.execCommand('copy')
+        document.body.removeChild(textArea)
+        alert('链接已复制到剪贴板！')
+      }
+    },
+    
+    shareToWechat() {
+      // 微信分享功能（需要微信JS-SDK）
+      alert('请使用微信扫描二维码分享')
+    },
+    
+    shareToQQ() {
+      // QQ分享功能
+      const url = encodeURIComponent(window.location.href)
+      const title = encodeURIComponent(this.article?.title || '')
+      const desc = encodeURIComponent(this.article?.summary || '')
+      window.open(`https://connect.qq.com/widget/shareqq/index.html?url=${url}&title=${title}&desc=${desc}`)
+    },
+    
+    async deleteArticle() {
+      if (!confirm('确定要删除这篇文章吗？删除后无法恢复。')) {
+        return
+      }
+      
+      try {
+        const token = localStorage.getItem('authToken')
+        if (!token) {
+          alert('请先登录')
+          return
+        }
+        
+        const response = await axios.delete(
+          `http://localhost:3001/api/articles/${this.articleId}`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        )
+        
+        if (response.data.success) {
+          alert('文章删除成功')
+          // 返回文章列表页
+          this.$router.push({ name: 'articles' })
+        } else {
+          alert(response.data.message || '删除失败')
+        }
+      } catch (error) {
+        console.error('删除文章失败:', error)
+        if (error.response?.status === 403) {
+          alert('您没有权限删除此文章')
+        } else {
+          alert('删除失败，请重试')
+        }
+      }
     }
   },
   mounted() {
@@ -942,6 +1152,236 @@ export default {
   border-color: #cbd5e0;
 }
 
+/* 文章操作按钮样式 */
+.article-actions {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid #e2e8f0;
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+}
+
+.delete-article-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.delete-article-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(239, 68, 68, 0.3);
+  background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+}
+
+.delete-article-btn:active {
+  transform: translateY(0);
+}
+
+.delete-article-btn .btn-icon {
+  font-size: 16px;
+}
+
+/* 分享功能样式 */
+.share-section {
+  background: #ffffff;
+  border-radius: 16px;
+  padding: 24px;
+  margin-bottom: 24px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.share-title {
+  color: #2d3748;
+  margin: 0 0 16px 0;
+  font-size: 1.2rem;
+  font-weight: 600;
+}
+
+.share-buttons {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.share-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  color: #4a5568;
+}
+
+.share-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.copy-btn:hover {
+  background: #f0f9ff;
+  border-color: #0ea5e9;
+  color: #0ea5e9;
+}
+
+.wechat-btn:hover {
+  background: #f0fdf4;
+  border-color: #22c55e;
+  color: #22c55e;
+}
+
+.qq-btn:hover {
+  background: #fef3c7;
+  border-color: #f59e0b;
+  color: #f59e0b;
+}
+
+.share-icon {
+  font-size: 16px;
+}
+
+/* 相关推荐样式 */
+.related-section {
+  background: #ffffff;
+  border-radius: 16px;
+  padding: 24px;
+  margin-bottom: 24px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.related-title {
+  color: #2d3748;
+  margin: 0 0 20px 0;
+  font-size: 1.2rem;
+  font-weight: 600;
+}
+
+.related-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+.related-card {
+  display: flex;
+  flex-direction: column;
+  background: #ffffff;
+  border: 2px solid #e2e8f0;
+  border-radius: 12px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.related-card:hover {
+  transform: translateY(-6px);
+  box-shadow: 0 12px 32px rgba(37, 99, 235, 0.2);
+  border-color: #2563eb;
+  background: #f8fafc;
+}
+
+.related-card:active {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(37, 99, 235, 0.15);
+}
+
+.related-cover {
+  height: 120px;
+  background: #f3f4f6;
+  background-size: cover;
+  background-position: center;
+  position: relative;
+}
+
+.related-cover-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
+}
+
+.related-cover-icon {
+  font-size: 1.5rem;
+  color: #9ca3af;
+}
+
+.related-content {
+  padding: 16px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.related-card-title {
+  color: #1f2937;
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  transition: color 0.2s ease;
+}
+
+.related-card:hover .related-card-title {
+  color: #2563eb;
+}
+
+.related-card-summary {
+  color: #6b7280;
+  font-size: 0.85rem;
+  line-height: 1.4;
+  margin: 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.related-card-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: auto;
+}
+
+.related-category {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.related-stats {
+  color: #9ca3af;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
 /* 响应式设计 */
 @media (max-width: 768px) {
   .article-container {
@@ -951,16 +1391,18 @@ export default {
   .article-header,
   .article-content,
   .interaction-section,
-  .comments-section {
-    padding: 24px;
+  .comments-section,
+  .share-section,
+  .related-section {
+    padding: 20px;
   }
   
   .article-title {
-    font-size: 2rem;
+    font-size: 1.8rem;
   }
   
   .article-summary {
-    font-size: 1.1rem;
+    font-size: 1rem;
   }
   
   .back-section {
@@ -976,6 +1418,18 @@ export default {
     width: 100%;
     max-width: 200px;
     justify-content: center;
+  }
+  
+  .share-buttons {
+    flex-direction: column;
+  }
+  
+  .share-btn {
+    justify-content: center;
+  }
+  
+  .related-grid {
+    grid-template-columns: 1fr;
   }
 }
 </style>

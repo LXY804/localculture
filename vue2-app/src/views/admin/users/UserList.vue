@@ -113,7 +113,7 @@
             <div class="avatar-container" @mouseenter="showUserCard(scope.row)" @mouseleave="hideUserCard">
               <img 
                 v-if="scope.row.avatar && scope.row.avatar !== 'avatar'" 
-                :src="scope.row.avatar" 
+                :src="getAvatarUrl(scope.row.avatar)" 
                 alt="头像" 
                 class="avatar-image"
                 @error="handleAvatarError"
@@ -214,7 +214,7 @@
     <!-- 用户卡片悬浮提示 -->
     <div v-if="showUserCardTooltip" class="user-card-tooltip" :style="tooltipStyle">
       <div class="user-card-content">
-        <img :src="hoveredUser.avatar" alt="头像" class="tooltip-avatar" v-if="hoveredUser.avatar && hoveredUser.avatar !== 'avatar'" />
+        <img :src="getAvatarUrl(hoveredUser.avatar)" alt="头像" class="tooltip-avatar" v-if="hoveredUser.avatar && hoveredUser.avatar !== 'avatar'" />
         <i v-else class="el-icon-user tooltip-avatar-placeholder"></i>
         <div class="tooltip-info">
           <div class="tooltip-username">{{ hoveredUser.username }}</div>
@@ -239,6 +239,41 @@
       @close="handleDialogClose"
     >
       <el-form :model="userForm" :rules="rules" ref="userForm" label-width="80px">
+        <!-- 头像上传 -->
+        <el-form-item label="头像">
+          <div class="avatar-upload-section">
+            <div class="avatar-preview-wrapper">
+              <img 
+                v-if="userForm.avatar && userForm.avatar !== 'avatar'" 
+                :src="getAvatarUrl(userForm.avatar)" 
+                class="avatar-preview"
+                alt="头像预览"
+              />
+              <i v-else class="el-icon-user avatar-placeholder-large"></i>
+            </div>
+            <div class="avatar-upload-buttons">
+              <el-upload
+                :action="getAvatarUploadAction()"
+                :headers="getUploadHeaders()"
+                :show-file-list="false"
+                :before-upload="beforeAvatarUpload"
+                :on-success="handleAvatarUploadSuccess"
+                :on-error="handleAvatarUploadError"
+              >
+                <el-button size="small" type="primary">上传头像</el-button>
+              </el-upload>
+              <el-button 
+                v-if="userForm.avatar" 
+                size="small" 
+                type="danger" 
+                @click="removeAvatar"
+              >
+                移除头像
+              </el-button>
+            </div>
+          </div>
+        </el-form-item>
+        
         <el-row :gutter="20">
           <el-col :span="12">
             <el-form-item label="用户名" prop="username">
@@ -334,7 +369,7 @@
     >
       <div v-if="currentUser" class="user-detail">
         <div class="user-header">
-          <img :src="currentUser.avatar" alt="头像" class="user-avatar" />
+          <img :src="getAvatarUrl(currentUser.avatar)" alt="头像" class="user-avatar" />
           <div class="user-info">
             <h3>{{ currentUser.username }}</h3>
             <p>{{ currentUser.profile.realName }}</p>
@@ -408,6 +443,7 @@ export default {
         phone: '',
         role: 'user',
         password: '',
+        avatar: '',
         profile: {
           realName: '',
           gender: 'male',
@@ -534,6 +570,7 @@ export default {
       this.isEdit = true
       this.userForm = {
         ...row,
+        avatar: row.avatar || '',
         profile: { ...row.profile }
       }
       this.dialogVisible = true
@@ -666,15 +703,20 @@ export default {
               this.$message.success('创建成功')
             }
             this.dialogVisible = false
-            this.fetchData()
+            // 刷新列表以显示更新的头像
+            await this.fetchData()
           } catch (error) {
-            this.$message.error('操作失败')
+            console.error('[用户管理] 保存失败:', error)
+            this.$message.error(error?.response?.data?.message || '操作失败')
           }
         }
       })
     },
-    handleDialogClose() {
+    async handleDialogClose() {
       this.$refs.userForm.resetFields()
+      // 关闭对话框后刷新列表，确保显示最新的头像（即使没有点击确定保存）
+      // 因为头像上传接口已经直接更新了数据库
+      await this.fetchData()
     },
     getRoleType(role) {
       const typeMap = {
@@ -711,8 +753,200 @@ export default {
       return rowIndex % 2 === 1 ? 'even-row' : 'odd-row'
     },
     handleAvatarError(event) {
+      console.error('[用户管理] 头像加载失败:', event.target.src)
+      // 隐藏失败的图片，显示占位符
       event.target.style.display = 'none'
-      event.target.nextElementSibling.style.display = 'inline-block'
+      // 查找并显示占位符图标
+      const container = event.target.closest('.avatar-container')
+      if (container) {
+        const placeholder = container.querySelector('.avatar-placeholder')
+        if (placeholder) {
+          placeholder.style.display = 'inline-block'
+        }
+      }
+    },
+    getUploadHeaders() {
+      // 使用与http.js相同的token key
+      const token = localStorage.getItem('authToken') || this.$store.state.authToken
+      return token ? { Authorization: `Bearer ${token}` } : {}
+    },
+    getAvatarUploadAction() {
+      // 如果正在编辑用户（有id），使用管理员接口为指定用户上传
+      // 如果是创建新用户（没有id），使用个人接口（会上传到当前登录用户）
+      if (this.isEdit && this.userForm && this.userForm.id) {
+        return `/api/users/${this.userForm.id}/avatar`
+      }
+      return '/api/upload/avatar'
+    },
+    getAvatarUrl(avatar) {
+      if (!avatar || avatar === 'avatar') return ''
+      
+      // 如果是DataURL(base64)，直接返回
+      if (avatar.startsWith('data:image')) {
+        return avatar
+      }
+      
+      // 如果已经是完整URL，直接返回
+      if (avatar.startsWith('http://') || avatar.startsWith('https://')) {
+        return avatar
+      }
+      
+      // 如果是相对路径（如 /uploads/xxx），转换为完整URL
+      if (avatar.startsWith('/uploads/')) {
+        // 静态资源直接访问后端服务器
+        return `http://localhost:3001${avatar}`
+      }
+      
+      // 如果是其他以 / 开头的路径
+      if (avatar.startsWith('/')) {
+        return `http://localhost:3001${avatar}`
+      }
+      
+      // 其他情况，尝试添加 /uploads 前缀
+      return `http://localhost:3001/uploads/${avatar}`
+    },
+    beforeAvatarUpload(file) {
+      const uploadAction = this.getAvatarUploadAction()
+      console.log('[头像上传] 准备上传文件:', file.name)
+      console.log('[头像上传] 文件大小:', (file.size / 1024 / 1024).toFixed(2) + 'MB')
+      console.log('[头像上传] 上传接口:', uploadAction)
+      console.log('[头像上传] 是否编辑模式:', this.isEdit)
+      console.log('[头像上传] 用户ID:', this.userForm?.id)
+      console.log('[头像上传] 请求头:', this.getUploadHeaders())
+      
+      const isImage = file.type.startsWith('image/')
+      const isLt5M = file.size / 1024 / 1024 < 5
+
+      if (!isImage) {
+        this.$message.error('只能上传图片文件！')
+        return false
+      }
+      if (!isLt5M) {
+        this.$message.error('头像大小不能超过 5MB！')
+        return false
+      }
+      return true
+    },
+    async handleAvatarUploadSuccess(response) {
+      console.log('上传成功，响应数据:', response)
+      // el-upload 会自动解析响应，response 已经是对象了
+      if (response && response.success && response.avatarUrl) {
+        this.userForm.avatar = response.avatarUrl
+        console.log('设置头像URL:', response.avatarUrl)
+        
+        // 如果返回了完整的用户信息，同步更新表单
+        if (response.user) {
+          this.userForm = { ...this.userForm, ...response.user }
+        }
+        
+        // 强制更新视图以确保头像预览立即显示
+        this.$forceUpdate()
+        
+        // 注意：头像已经通过上传接口更新到数据库了
+        // 所以即使不点击"确定"保存，头像也已经保存了
+        // 这里只需要刷新列表即可显示新头像
+        this.$message.success('头像上传成功！')
+        
+        // 如果是编辑模式，上传接口已经更新了数据库，立即刷新列表显示新头像
+        if (this.isEdit && this.userForm.id) {
+          console.log('[头像上传] 上传接口已更新数据库，刷新用户列表...')
+          // 延迟一小段时间后刷新，确保数据库更新已完成
+          setTimeout(async () => {
+            await this.fetchData()
+          }, 500)
+        }
+      } else {
+        console.error('上传响应格式错误:', response)
+        this.$message.error(response.message || '头像上传失败')
+      }
+    },
+    handleAvatarUploadProgress(event) {
+      console.log('[头像上传] 上传进度:', event.percent + '%')
+    },
+    handleAvatarUploadError(err) {
+      console.error('[头像上传] 失败错误对象:', err)
+      console.error('[头像上传] 错误响应:', err?.response)
+      
+      // el-upload 的错误处理
+      // 注意：el-upload 的 on-error 接收的错误对象格式可能不同
+      let errorMessage = '头像上传失败，请重试'
+      
+      // el-upload 可能返回 XMLHttpRequest 错误或字符串
+      if (typeof err === 'string') {
+        errorMessage = err
+      } else if (err?.message) {
+        errorMessage = err.message
+      } else if (err?.response) {
+        // 如果有响应对象，说明是 HTTP 错误
+        const status = err.response.status
+        const data = err.response.data
+        
+        console.error('[头像上传] HTTP状态码:', status)
+        console.error('[头像上传] 错误数据:', data)
+        
+        if (data?.message) {
+          errorMessage = data.message
+        } else if (status === 403) {
+          errorMessage = '没有权限上传头像'
+        } else if (status === 401) {
+          errorMessage = '未登录或登录已过期，请重新登录'
+        } else if (status === 404) {
+          errorMessage = '用户不存在或接口不存在'
+        } else if (status === 400) {
+          errorMessage = data?.message || '请求参数错误'
+        } else if (status === 500) {
+          errorMessage = '服务器错误，请稍后重试'
+        } else {
+          errorMessage = `上传失败 (错误代码: ${status})`
+        }
+      }
+      
+      // 检查是否是网络错误
+      if (!err) {
+        errorMessage = '网络连接失败，请检查网络'
+      }
+      
+      console.error('[头像上传] 最终错误消息:', errorMessage)
+      console.error('[头像上传] 当前上传接口:', this.getAvatarUploadAction())
+      console.error('[头像上传] 当前用户ID:', this.userForm?.id)
+      
+      this.$message.error(errorMessage)
+    },
+    async removeAvatar() {
+      try {
+        // 如果是编辑模式，需要立即更新数据库
+        if (this.isEdit && this.userForm && this.userForm.id) {
+          // 调用更新用户API，将头像设置为null
+          const updateData = {
+            ...this.userForm,
+            avatar: null
+          }
+          
+          console.log('[移除头像] 更新用户头像为null，用户ID:', this.userForm.id)
+          await this.$store.dispatch('users/updateUser', updateData)
+          
+          // 更新表单数据
+          this.userForm.avatar = null
+          
+          // 强制更新视图
+          this.$forceUpdate()
+          
+          // 刷新列表显示
+          setTimeout(async () => {
+            await this.fetchData()
+          }, 300)
+          
+          this.$message.success('头像已移除')
+        } else {
+          // 如果是创建新用户模式，只需清空表单字段
+          this.userForm.avatar = ''
+          this.$forceUpdate()
+          this.$message.info('头像已移除')
+        }
+      } catch (error) {
+        console.error('[移除头像] 移除失败:', error)
+        this.$message.error(error?.response?.data?.message || '移除头像失败，请重试')
+      }
     },
     showUserCard(user) {
       this.hoveredUser = user
@@ -972,6 +1206,46 @@ export default {
   font-size: 12px;
   color: #909399;
   font-weight: 500;
+}
+
+/* 头像上传区域样式 */
+.avatar-upload-section {
+  display: flex;
+  align-items: flex-start;
+  gap: 20px;
+}
+
+.avatar-preview-wrapper {
+  flex-shrink: 0;
+}
+
+.avatar-preview {
+  width: 100px;
+  height: 100px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid #e4e7ed;
+  display: block;
+}
+
+.avatar-placeholder-large {
+  width: 100px;
+  height: 100px;
+  border-radius: 50%;
+  background: #f5f7fa;
+  color: #c0c4cc;
+  font-size: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid #e4e7ed;
+}
+
+.avatar-upload-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 20px;
 }
 
 /* 头像样式 */

@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="AutoImportSettings">
+    <option name="autoReloadType" value="SELECTIVE" />
+  </component>
+  <component name="ChangeListManager">
+    <list default="true" id="86a098c0-4720-4b16-a39f-d720a3cac7fe" name="更改" comment="">
+      <change beforePath="$PROJECT_DIR$/vue2-app/.npm-cache/_logs/2025-11-02T10_03_49_130Z-debug-0.log" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/vue2-app/server/index.js" beforeDir="false" afterPath="$PROJECT_DIR$/vue2-app/server/index.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/vue2-app/src/components/layout/AdminLayout.vue" beforeDir="false" afterPath="$PROJECT_DIR$/vue2-app/src/components/layout/AdminLayout.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/vue2-app/src/store/modules/settings.js" beforeDir="false" afterPath="$PROJECT_DIR$/vue2-app/src/store/modules/settings.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/vue2-app/src/views/admin/settings/PersonalSettings.vue" beforeDir="false" afterPath="$PROJECT_DIR$/vue2-app/src/views/admin/settings/PersonalSettings.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/vue2-app/src/views/admin/users/UserList.vue" beforeDir="false" afterPath="$PROJECT_DIR$/vue2-app/src/views/admin/users/UserList.vue" afterDir="false" />
+    </list>
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="Git.Settings">
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+  </component>
+  <component name="ProjectColorInfo">{
+  &quot;associatedIndex&quot;: 8
+}</component>
+  <component name="ProjectId" id="34uUBm0LtGV4xfVSeGxWwRGCe3n" />
+  <component name="ProjectViewState">
+    <option name="hideEmptyMiddlePackages" value="true" />
+    <option name="showLibraryContents" value="true" />
+  </component>
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;Admin-Panel&quot;,
+    &quot;kotlin-language-version-configured&quot;: &quot;true&quot;,
+    &quot;settings.editor.selected.configurable&quot;: &quot;vcs.Git&quot;
+  }
+}</component>
+  <component name="RunManager">
+    <configuration default="true" type="JetRunConfigurationType">
+      <module name="localculture" />
+      <method v="2">
+        <option name="Make" enabled="true" />
+      </method>
+    </configuration>
+    <configuration default="true" type="KotlinStandaloneScriptRunConfigurationType">
+      <module name="localculture" />
+      <option name="filePath" />
+      <method v="2">
+        <option name="Make" enabled="true" />
+      </method>
+    </configuration>
+  </component>
+  <component name="SpellCheckerSettings" RuntimeDictionaries="0" Folders="0" CustomDictionaries="0" DefaultDictionary="应用程序级" UseSingleDictionary="true" transferred="true" />
+  <component name="TaskManager">
+    <task active="true" id="Default" summary="默认任务">
+      <changelist id="86a098c0-4720-4b16-a39f-d720a3cac7fe" name="更改" comment="" />
+      <created>1762062817204</created>
+      <option name="number" value="Default" />
+      <option name="presentableId" value="Default" />
+      <updated>1762062817204</updated>
+    </task>
+    <servers />
+  </component>
+</project>

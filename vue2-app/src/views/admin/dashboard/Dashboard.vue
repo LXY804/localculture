@@ -155,10 +155,30 @@ export default {
     }
   },
   mounted() {
-    this.fetchData()
-    this.$nextTick(() => {
-      this.initCharts()
+    this.fetchData().then(() => {
+      this.$nextTick(() => {
+        this.initCharts()
+      })
     })
+  },
+  watch: {
+    // 监听数据变化，更新图表
+    'charts.userGrowth'(newVal) {
+      if (this.userChart && newVal && newVal.length > 0) {
+        this.updateUserChart()
+      }
+    },
+    'charts.announcementTrends'(newVal) {
+      if (this.announcementChart && newVal && newVal.length > 0) {
+        this.updateAnnouncementChart()
+      }
+    },
+    'stats.totalUsers'() {
+      // 当用户数更新时，可能需要重新获取增长趋势
+      if (this.$store.state.user?.currentUser?.role === 'admin') {
+        this.$store.dispatch('dashboard/fetchDashboardData')
+      }
+    }
   },
   methods: {
     async fetchData() {
@@ -171,20 +191,31 @@ export default {
       this.initSystemChart()
     },
     initAnnouncementChart() {
+      if (!this.$refs.announcementChart) return
       this.announcementChart = echarts.init(this.$refs.announcementChart)
+      this.updateAnnouncementChart()
+    },
+    updateAnnouncementChart() {
+      if (!this.announcementChart) return
+      
+      const trends = this.charts.announcementTrends || []
+      const dates = trends.map(item => item.date || '')
+      const counts = trends.map(item => parseInt(item.count) || 0)
+      
       const option = {
         tooltip: {
           trigger: 'axis'
         },
         xAxis: {
           type: 'category',
-          data: this.charts.announcementTrends.map(item => item.date)
+          data: dates
         },
         yAxis: {
-          type: 'value'
+          type: 'value',
+          minInterval: 1
         },
         series: [{
-          data: this.charts.announcementTrends.map(item => item.count),
+          data: counts,
           type: 'line',
           smooth: true,
           itemStyle: {
@@ -192,30 +223,54 @@ export default {
           }
         }]
       }
-      this.announcementChart.setOption(option)
+      this.announcementChart.setOption(option, true)
     },
     initUserChart() {
+      if (!this.$refs.userChart) return
       this.userChart = echarts.init(this.$refs.userChart)
+      this.updateUserChart()
+    },
+    updateUserChart() {
+      if (!this.userChart) return
+      
+      const userGrowthData = this.charts.userGrowth || []
+      const dates = userGrowthData.map(item => item.date || '')
+      const counts = userGrowthData.map(item => parseInt(item.count) || 0)
+      
       const option = {
         tooltip: {
-          trigger: 'axis'
+          trigger: 'axis',
+          formatter: function(params) {
+            const param = params[0]
+            return `${param.name}<br/>用户数: ${param.value}`
+          }
         },
         xAxis: {
           type: 'category',
-          data: this.charts.userGrowth.map(item => item.date)
+          data: dates,
+          axisLabel: {
+            rotate: 45,
+            interval: 0
+          }
         },
         yAxis: {
-          type: 'value'
+          type: 'value',
+          minInterval: 1
         },
         series: [{
-          data: this.charts.userGrowth.map(item => item.count),
+          name: '用户数',
+          data: counts,
           type: 'bar',
           itemStyle: {
             color: '#67C23A'
+          },
+          label: {
+            show: true,
+            position: 'top'
           }
         }]
       }
-      this.userChart.setOption(option)
+      this.userChart.setOption(option, true)
     },
     initReadingChart() {
       this.readingChart = echarts.init(this.$refs.readingChart)

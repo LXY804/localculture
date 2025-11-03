@@ -3,7 +3,7 @@
     <!-- 侧边栏 -->
     <div class="sidebar" :class="{ collapsed: sidebarCollapsed }">
       <div class="sidebar-header">
-        <img src="/assets/logo.png" alt="Logo" class="logo">
+        <img :src="logoUrl" alt="Logo" class="logo" @error="handleLogoError">
         <span v-if="!sidebarCollapsed" class="logo-text">后台管理</span>
       </div>
       <el-menu
@@ -93,7 +93,7 @@
         <div class="header-right">
           <el-dropdown @command="handleCommand">
             <span class="user-info">
-              <img :src="userAvatar" alt="Avatar" class="user-avatar">
+              <img :src="getAvatarUrl(userAvatar)" alt="Avatar" class="user-avatar">
               <span class="username">{{ username }}</span>
               <i class="el-icon-arrow-down"></i>
             </span>
@@ -119,7 +119,8 @@ export default {
   name: 'AdminLayout',
   data() {
     return {
-      sidebarCollapsed: false
+      sidebarCollapsed: false,
+      logoError: false
     }
   },
   computed: {
@@ -131,6 +132,13 @@ export default {
     },
     userAvatar() {
       return this.$store.getters['settings/profile']?.avatar || '/assets/logo.png'
+    },
+    logoUrl() {
+      // 如果logo加载失败，使用一个默认的SVG图标作为占位符
+      if (this.logoError) {
+        return 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzIiIGhlaWdodD0iMzIiIHZpZXdCb3g9IjAgMCAzMiAzMiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMTYiIGN5PSIxNiIgcj0iMTYiIGZpbGw9IiM0MDlFRkYiLz4KPHBhdGggZD0iTTE2IDEwQzE3LjEgMTAgMTggMTAuOSAxOCAxMkMxOCAxMy4xIDE3LjEgMTQgMTYgMTRDMTQuOSAxNCAxNCAxMy4xIDE0IDEyQzE0IDEwLjkgMTQuOSAxMCAxNiAxMFoiIGZpbGw9IndoaXRlIi8+CjxwYXRoIGQ9Ik0xNiAxNkMxMyAyMiAxMiAyNCAxMiAyNkgxOEMxOCAyNCAxNyAyMiAxNiAxNloiIGZpbGw9IndoaXRlIi8+Cjwvc3ZnPgo='
+      }
+      return '/assets/logo.png'
     },
     breadcrumbs() {
       const path = this.$route.path
@@ -187,6 +195,34 @@ export default {
       } catch (error) {
         // 用户取消退出
       }
+    },
+    getAvatarUrl(avatar) {
+      if (!avatar || avatar === '/assets/logo.png') {
+        return '/assets/logo.png'
+      }
+      
+      // 如果是完整的URL（http/https），直接返回
+      if (avatar.startsWith('http://') || avatar.startsWith('https://')) {
+        return avatar
+      }
+      
+      // 如果是data URL（base64），直接返回
+      if (avatar.startsWith('data:image')) {
+        return avatar
+      }
+      
+      // 如果是相对路径（/uploads/...），需要拼接后端服务器地址
+      if (avatar.startsWith('/uploads/')) {
+        return `http://localhost:3001${avatar}`
+      }
+      
+      // 其他情况直接返回
+      return avatar
+    },
+    handleLogoError() {
+      // Logo加载失败时，设置标志位以显示占位符
+      console.warn('[AdminLayout] Logo加载失败，使用默认占位符')
+      this.logoError = true
     }
   }
 }
@@ -333,6 +369,8 @@ export default {
   height: 32px;
   border-radius: 50%;
   margin-right: 8px;
+  object-fit: cover;
+  background-color: #f0f0f0;
 }
 
 .username {
